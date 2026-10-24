@@ -48,7 +48,7 @@ export function FleetPage() {
               no fleet hosts configured. set FLEET_HOSTS to add secondary llama-swap instances.
             </div>
           ) : (
-            <div className="grid min-h-0 flex-1 auto-rows-min gap-4 p-4 max-md:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid min-h-0 flex-1 auto-rows-min gap-4 overflow-auto p-4 max-md:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
               {data.hosts.map((host) => (
                 <HostCard key={host.id} host={host} />
               ))}
