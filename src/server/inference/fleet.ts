@@ -7,6 +7,8 @@ export type FleetHost = {
   label: string
   primary: boolean
   backend: InferenceBackend
+  /** Path to this host's llama-swap activity SQLite store, for the watchtower. */
+  activityStorePath: string | null
 }
 
 /**
@@ -30,12 +32,39 @@ function parseFleetHosts(): Array<{ id: string; url: string }> {
     .filter(({ id, url }) => id && url)
 }
 
+/** Parse FLEET_ACTIVITY_PATHS (comma-separated `id=path` pairs). */
+function parseActivityPaths(): Map<string, string> {
+  const raw = config.fleetActivityPaths.trim()
+  if (!raw) return new Map()
+  const map = new Map<string, string>()
+  for (const entry of raw.split(',')) {
+    const eq = entry.indexOf('=')
+    if (eq === -1) continue
+    const id = entry.slice(0, eq).trim()
+    const path = entry.slice(eq + 1).trim()
+    if (id && path) map.set(id, path)
+  }
+  return map
+}
+
+const activityPaths = parseActivityPaths()
+
 export const fleet: FleetHost[] = [
-  { id: 'primary', label: 'Primary', primary: true, backend: inferenceBackend },
+  {
+    id: 'primary',
+    label: 'Primary',
+    primary: true,
+    backend: inferenceBackend,
+    // The primary's activity store is the local llama-swap store, derived from
+    // the config file path (config.yaml -> activity.sqlite in the same dir).
+    activityStorePath:
+      activityPaths.get('primary') ?? config.inferenceConfigFile.replace(/config\.yaml$/, 'activity.sqlite'),
+  },
   ...parseFleetHosts().map(({ id, url }) => ({
     id,
     label: id,
     primary: false,
     backend: createLlamaSwapBackend(url),
+    activityStorePath: activityPaths.get(id) ?? null,
   })),
 ]

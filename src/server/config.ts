@@ -33,12 +33,17 @@ export const config = {
   upstreamBodyTimeoutMs: parseMs(process.env.UPSTREAM_BODY_TIMEOUT_MS, 0),
   headroomBaseUrl: process.env.HEADROOM_BASE_URL ? stripTrailingSlash(process.env.HEADROOM_BASE_URL) : null,
   metricsToken: process.env.METRICS_TOKEN ?? null,
-  // Comma-separated secondary llama-swap hosts for read-only fleet observation,
-  // e.g. "macbook=http://100.68.81.83:8999,mini=http://100.102.22.38:8999".
-  // The primary (INFERENCE_BASE_URL) is always the first fleet member and the
-  // only one the proxy routes to. These are observed, never routed to.
-  fleetHosts: process.env.FLEET_HOSTS ?? '',
-}
+    // Comma-separated secondary llama-swap hosts for read-only fleet observation,
+    // e.g. "macbook=http://100.68.81.83:8999,mini=http://100.102.22.38:8999".
+    // The primary (INFERENCE_BASE_URL) is always the first fleet member and the
+    // only one the proxy routes to. These are observed, never routed to.
+    fleetHosts: process.env.FLEET_HOSTS ?? '',
+    // Comma-separated activity-store paths per fleet host, e.g.
+    // "macbook=/Volumes/prasta/.hermes/llama-swap/activity.sqlite". The primary
+    // defaults to the local llama-swap activity store. Used by the watchtower to
+    // read per-model performance without being in the traffic path.
+    fleetActivityPaths: process.env.FLEET_ACTIVITY_PATHS ?? '',
+  }
 
 function loadDotEnvFile() {
   const path = resolve(process.cwd(), '.env')

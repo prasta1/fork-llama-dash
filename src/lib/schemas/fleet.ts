@@ -31,6 +31,24 @@ const BackendRunningModelSchema = v.object({
   contextLength: v.nullable(v.number()),
 })
 
+const ModelActivityStatsSchema = v.object({
+  model: v.string(),
+  requests: v.number(),
+  avgTokensPerSecond: v.nullable(v.number()),
+  avgDurationMs: v.nullable(v.number()),
+  outputTokens: v.number(),
+  inputTokens: v.number(),
+  errorCount: v.number(),
+})
+
+const ActivitySummarySchema = v.object({
+  available: v.boolean(),
+  path: v.nullable(v.string()),
+  error: v.nullable(v.string()),
+  windowDays: v.number(),
+  models: v.array(ModelActivityStatsSchema),
+})
+
 export const FleetHostSchema = v.object({
   id: v.string(),
   label: v.string(),
@@ -46,6 +64,7 @@ export const FleetHostSchema = v.object({
   }),
   models: v.array(BackendModelSchema),
   running: v.array(BackendRunningModelSchema),
+  activity: ActivitySummarySchema,
 })
 
 export const FleetResponseSchema = v.object({

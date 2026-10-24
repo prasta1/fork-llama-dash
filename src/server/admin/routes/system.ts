@@ -1,4 +1,5 @@
 import { hasDashboardUsers } from '../../auth.ts'
+import { readActivitySummary } from '../../activity.ts'
 import { config } from '../../config.ts'
 import { databasePathInfo } from '../../db/index.ts'
 import { fleet } from '../../inference/fleet.ts'
@@ -92,10 +93,11 @@ export const systemRoutes: Route[] = [
     handler: async () => {
       const hosts = await Promise.all(
         fleet.map(async (host) => {
-          const [health, models, running] = await Promise.all([
+          const [health, models, running, activity] = await Promise.all([
             host.backend.health().catch(() => ({ reachable: false, error: 'unreachable' })),
             host.backend.listModels().catch(() => []),
             host.backend.listRunning?.().catch(() => []) ?? Promise.resolve([]),
+            Promise.resolve(readActivitySummary(host.activityStorePath)),
           ])
           return {
             id: host.id,
@@ -105,6 +107,7 @@ export const systemRoutes: Route[] = [
             health,
             models,
             running,
+            activity,
           }
         }),
       )

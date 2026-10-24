@@ -84,9 +84,7 @@ function HostCard({ host }: { host: ApiFleetHost }) {
         <span>
           <span className="text-fg">{resident}</span>/{total} resident
         </span>
-        {host.health.latencyMs != null ? (
-          <span>{host.health.latencyMs}ms</span>
-        ) : null}
+        {host.health.latencyMs != null ? <span>{host.health.latencyMs}ms</span> : null}
         {host.health.version ? <span className="truncate">{host.health.version}</span> : null}
       </div>
 
@@ -122,6 +120,58 @@ function HostCard({ host }: { host: ApiFleetHost }) {
           </table>
         )}
       </div>
+
+      <ActivityPanel host={host} />
+    </div>
+  )
+}
+
+function ActivityPanel({ host }: { host: ApiFleetHost }) {
+  const { activity } = host
+  if (!activity.available) {
+    return (
+      <div className="border-t border-border px-3 py-2 font-mono text-[10px] text-fg-dim">
+        activity: {activity.error ?? 'unavailable'}
+      </div>
+    )
+  }
+  if (activity.models.length === 0) {
+    return (
+      <div className="border-t border-border px-3 py-2 font-mono text-[10px] text-fg-dim">
+        no activity in last {activity.windowDays}d
+      </div>
+    )
+  }
+  return (
+    <div className="border-t border-border">
+      <div className="flex items-center justify-between px-3 pt-2 pb-1 font-mono text-[10px] uppercase tracking-[0.12em] text-fg-faint">
+        <span>performance · {activity.windowDays}d</span>
+        <span className="normal-case tracking-normal text-fg-dim">tok/s · reqs · out</span>
+      </div>
+      <table className="dtable">
+        <thead>
+          <tr>
+            <th className="mono">model</th>
+            <th className="num">tok/s</th>
+            <th className="num hide-mobile">reqs</th>
+            <th className="num hide-mobile">out tok</th>
+          </tr>
+        </thead>
+        <tbody>
+          {activity.models.slice(0, 8).map((m) => (
+            <tr key={m.model}>
+              <td className="mono break-all">{m.model}</td>
+              <td className="num font-mono text-[11px] text-fg">
+                {m.avgTokensPerSecond != null ? m.avgTokensPerSecond.toFixed(1) : '—'}
+              </td>
+              <td className="num hide-mobile font-mono text-[11px] text-fg-dim">{m.requests}</td>
+              <td className="num hide-mobile font-mono text-[11px] text-fg-dim">
+                {m.outputTokens >= 1000 ? `${(m.outputTokens / 1000).toFixed(0)}k` : m.outputTokens}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
