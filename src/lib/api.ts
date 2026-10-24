@@ -16,6 +16,7 @@ import { ApiSystemStatusSchema, LoginMetaSchema } from './schemas/system'
 import { ApiConfigReadSchema, ApiConfigSaveResultSchema, ApiConfigValidationSchema } from './schemas/config'
 import { GpuSnapshotSchema } from './schemas/gpu'
 import { ApiHealthSchema } from './schemas/health'
+import { FleetResponseSchema } from './schemas/fleet'
 import { ModelDetailResponseSchema, ModelsResponseSchema, ModelTimelineResponseSchema } from './schemas/model'
 import {
   HistogramResponseSchema,
@@ -62,6 +63,7 @@ export type { ContextCompressionPolicy, ContextCompressionMatch } from './schema
 export type { UpstreamCredential } from './schemas/upstream-credential'
 export type { AttributionSettings, PrivacySettings, RequestLimits } from './schemas/settings'
 export type { ApiSystemStatus, LoginMeta } from './schemas/system'
+export type { ApiFleetHost, ApiFleetResponse } from './schemas/fleet'
 export type { InferenceHardware } from './schemas/inference-hardware'
 export type { ArticleExtractResponse } from './schemas/article'
 
@@ -133,6 +135,7 @@ export const api = {
   validateConfig: (content: string) =>
     sendJson('/api/config/validate', ApiConfigValidationSchema, { method: 'POST', body: { content } }),
   health: () => getJson('/api/health', ApiHealthSchema),
+  fleet: () => getJson('/api/fleet', FleetResponseSchema),
   loginMeta: () => getJson('/api/login-meta', LoginMetaSchema),
   systemStatus: () => getJson('/api/system', ApiSystemStatusSchema),
   requestStats: () => getJson('/api/requests/stats', ApiRequestStatsSchema),

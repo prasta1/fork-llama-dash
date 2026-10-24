@@ -1,6 +1,7 @@
 import { hasDashboardUsers } from '../../auth.ts'
 import { config } from '../../config.ts'
 import { databasePathInfo } from '../../db/index.ts'
+import { fleet } from '../../inference/fleet.ts'
 import { getGpuSnapshot } from '../../gpu-poller.ts'
 import { inferenceBackend } from '../../inference/backend.ts'
 import { getRequestLogQueueStats } from '../../proxy/log.ts'
@@ -83,6 +84,31 @@ export const systemRoutes: Route[] = [
           gpus: gpu.gpus,
         },
       })
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/fleet$/,
+    handler: async () => {
+      const hosts = await Promise.all(
+        fleet.map(async (host) => {
+          const [health, models, running] = await Promise.all([
+            host.backend.health().catch(() => ({ reachable: false, error: 'unreachable' })),
+            host.backend.listModels().catch(() => []),
+            host.backend.listRunning?.().catch(() => []) ?? Promise.resolve([]),
+          ])
+          return {
+            id: host.id,
+            label: host.label,
+            primary: host.primary,
+            upstreamHost: host.backend.info.upstreamHost,
+            health,
+            models,
+            running,
+          }
+        }),
+      )
+      return json(200, { hosts })
     },
   },
   {

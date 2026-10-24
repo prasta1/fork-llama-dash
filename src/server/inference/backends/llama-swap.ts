@@ -1,5 +1,4 @@
-import { config } from '../../config.ts'
-import { llamaSwap } from '../../llama-swap/client.ts'
+import { createLlamaSwapClient } from '../../llama-swap/client.ts'
 import type { OpenAiModel, RunningModel } from '../../llama-swap/client.ts'
 import type {
   BackendModel,
@@ -82,12 +81,12 @@ function mapLlamaSwapRunningModel(model: RunningModel): BackendRunningModel {
   }
 }
 
-function getLlamaSwapInfo(): InferenceBackendInfo {
-  const upstreamUrl = new URL(config.inferenceBaseUrl)
+function getLlamaSwapInfo(baseUrl: string): InferenceBackendInfo {
+  const upstreamUrl = new URL(baseUrl)
   return {
     kind: 'llama-swap',
     label: 'llama-swap',
-    upstreamBaseUrl: config.inferenceBaseUrl,
+    upstreamBaseUrl: baseUrl,
     upstreamHost: upstreamUrl.host,
     capabilities: {
       models: true,
@@ -100,15 +99,16 @@ function getLlamaSwapInfo(): InferenceBackendInfo {
   }
 }
 
-export function createLlamaSwapBackend(): InferenceBackend {
+export function createLlamaSwapBackend(baseUrl: string): InferenceBackend {
+  const client = createLlamaSwapClient(baseUrl)
   return {
     get info() {
-      return getLlamaSwapInfo()
+      return getLlamaSwapInfo(baseUrl)
     },
     async ping() {
       const t0 = performance.now()
       try {
-        await llamaSwap.health()
+        await client.health()
         return { reachable: true, latencyMs: Math.round(performance.now() - t0) }
       } catch {
         return { reachable: false }
@@ -117,7 +117,7 @@ export function createLlamaSwapBackend(): InferenceBackend {
     async health() {
       try {
         const t0 = performance.now()
-        const [health, version] = await Promise.all([llamaSwap.health(), llamaSwap.version()])
+        const [health, version] = await Promise.all([client.health(), client.version()])
         const latencyMs = Math.round(performance.now() - t0)
         return { reachable: true, health: health.trim(), latencyMs, ...version }
       } catch (err) {
@@ -128,32 +128,32 @@ export function createLlamaSwapBackend(): InferenceBackend {
       }
     },
     defaultProxyUpstream(pathname, search) {
-      return `${config.inferenceBaseUrl}${pathname}${search}`
+      return `${baseUrl}${pathname}${search}`
     },
     // llama-swap v259 split log traffic from dashboard events. Request the two
     // streams rendered by llama-dash's Logs page; the upstream sends backlog
     // followed by live SSE logData envelopes.
-    eventStreamUrl: `${config.inferenceBaseUrl}/api/events/logs?stream=proxy&stream=upstream`,
+    eventStreamUrl: `${baseUrl}/api/events/logs?stream=proxy&stream=upstream`,
     async listModels() {
-      const models = await llamaSwap.listModels()
+      const models = await client.listModels()
       return models.data.map(mapLlamaSwapModel)
     },
     async listRunning() {
-      const { running } = await llamaSwap.listRunning()
+      const { running } = await client.listRunning()
       return running.map(mapLlamaSwapRunningModel)
     },
-    hardware: () => llamaSwap.hardware(),
+    hardware: () => client.hardware(),
     modelLogNames: getLlamaSwapModelLogNames,
     modelConfigSnippet: getLlamaSwapModelConfigSnippet,
     modelContextLengthHints: getLlamaSwapConfigContextLengths,
     async loadModel(id) {
-      await llamaSwap.loadModel(id)
+      await client.loadModel(id)
     },
     async unloadModel(id) {
-      await llamaSwap.unloadModel(id)
+      await client.unloadModel(id)
     },
     async unloadAll() {
-      await llamaSwap.unloadAll()
+      await client.unloadAll()
     },
   }
 }

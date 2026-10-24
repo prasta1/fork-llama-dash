@@ -24,6 +24,7 @@ import {
   type ApiRequestDetail,
   type ApiRequestStats,
   type ApiSystemStatus,
+  type ApiFleetResponse,
   type AttributionSettings,
   type ModelAliasItem,
   type McpRelay,
@@ -57,6 +58,7 @@ function toastMutationError(title: string, error: Error) {
 
 export const qk = {
   health: ['health'] as const,
+  fleet: ['fleet'] as const,
   systemStatus: ['system'] as const,
   models: ['models'] as const,
   requests: ['requests'] as const,
@@ -86,6 +88,14 @@ export function useHealth(): UseQueryResult<ApiHealth> {
   return useQuery({
     queryKey: qk.health,
     queryFn: () => api.health(),
+  })
+}
+
+export function useFleet(): UseQueryResult<ApiFleetResponse> {
+  return useQuery({
+    queryKey: qk.fleet,
+    queryFn: () => api.fleet(),
+    refetchInterval: POLL_MS,
   })
 }
 

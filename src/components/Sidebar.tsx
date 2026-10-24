@@ -36,6 +36,7 @@ import { Tooltip } from './Tooltip'
 
 type NavTarget =
   | '/'
+  | '/fleet'
   | '/models'
   | '/requests'
   | '/logs'
@@ -71,6 +72,7 @@ const SECTIONS: ReadonlyArray<NavSection> = [
     title: 'observe',
     items: [
       { to: '/', label: 'Dashboard', leader: 'd', Icon: LayoutDashboard },
+      { to: '/fleet', label: 'Fleet', leader: 'f', Icon: Boxes },
       { to: '/requests', label: 'Requests', leader: 'r', Icon: ScrollText },
       { to: '/logs', label: 'Logs', leader: 'l', Icon: Terminal },
       { to: '/system', label: 'System', leader: 's', Icon: ServerCog },
