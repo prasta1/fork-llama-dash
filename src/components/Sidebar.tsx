@@ -276,7 +276,7 @@ function SidebarNav({
                 key={to}
                 to={to}
                 className={NAV_LINK}
-                activeOptions={{ exact: to === '/' }}
+                activeOptions={{ exact: to === '/' || to === '/fleet' }}
                 activeProps={{ className: NAV_LINK_ACTIVE }}
                 onClick={onNavigate}
               >
