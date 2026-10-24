@@ -24,10 +24,10 @@ vi.mock('./gpu-poller.ts', () => ({
 }))
 
 vi.mock('./llama-swap/client.ts', () => ({
-  llamaSwap: {
+  createLlamaSwapClient: () => ({
     health: vi.fn(async () => 'OK'),
     listRunning: vi.fn(async () => ({ running: [{ model: 'local-a' }, { model: 'local-b' }] })),
-  },
+  }),
 }))
 
 vi.mock('./proxy/log.ts', () => ({
