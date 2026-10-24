@@ -116,12 +116,20 @@ function HostCard({ host }: { host: ApiFleetHost }) {
                 <th style={{ width: 18 }} aria-label="state" />
                 <th className="mono">id</th>
                 <th style={{ width: 90 }}>state</th>
+                <th style={{ width: 70 }} className="hide-mobile">
+                  ctx
+                </th>
+                <th style={{ width: 60 }} className="hide-mobile">
+                  ttl
+                </th>
               </tr>
             </thead>
             <tbody>
               {host.models.map((m) => {
                 const run = host.running.find((r) => r.model === m.id)
                 const state = run?.state ?? 'stopped'
+                const ctx = m.contextLength ?? run?.contextLength ?? null
+                const ttl = run?.ttl ?? null
                 return (
                   <tr key={m.id}>
                     <td>
@@ -129,6 +137,12 @@ function HostCard({ host }: { host: ApiFleetHost }) {
                     </td>
                     <td className="mono break-all">{m.id}</td>
                     <td className="font-mono text-[11px] text-fg-dim">{state}</td>
+                    <td className="hide-mobile font-mono text-[11px] text-fg-dim">
+                      {ctx != null ? (ctx >= 1000 ? `${(ctx / 1000).toFixed(0)}k` : ctx) : '—'}
+                    </td>
+                    <td className="hide-mobile font-mono text-[11px] text-fg-dim">
+                      {ttl != null ? `${Math.round(ttl / 60)}m` : '—'}
+                    </td>
                   </tr>
                 )
               })}
