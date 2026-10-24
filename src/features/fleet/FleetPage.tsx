@@ -83,7 +83,7 @@ function HostCard({ host }: { host: ApiFleetHost }) {
 
       <div className="flex items-center gap-4 border-b border-border px-3 py-2 font-mono text-[11px] text-fg-muted">
         <span>
-          <span className="text-fg">{resident}</span>/{total} resident
+          <span className="text-fg">{resident}</span>/{total} ready
         </span>
         {host.health.latencyMs != null ? <span>{host.health.latencyMs}ms</span> : null}
         {host.health.version ? <span className="truncate">{host.health.version}</span> : null}
