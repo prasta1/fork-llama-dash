@@ -64,6 +64,7 @@ function HostCard({ host }: { host: ApiFleetHost }) {
   const reachable = host.health.reachable
   const resident = host.running.filter((r) => r.state === 'ready').length
   const total = host.models.length
+  const healthError = host.health.error ?? null
 
   return (
     <div className="flex flex-col overflow-hidden rounded border border-border bg-surface-2">
@@ -87,6 +88,17 @@ function HostCard({ host }: { host: ApiFleetHost }) {
         {host.health.latencyMs != null ? <span>{host.health.latencyMs}ms</span> : null}
         {host.health.version ? <span className="truncate">{host.health.version}</span> : null}
       </div>
+
+      {!reachable ? (
+        <div className="border-b border-err/30 bg-err/10 px-3 py-2">
+          <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-err">unreachable</div>
+          {healthError ? (
+            <div className="mt-0.5 break-all font-mono text-[11px] text-fg-muted" title={healthError}>
+              {healthError}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="min-h-0 flex-1 overflow-auto">
         {host.models.length === 0 ? (
