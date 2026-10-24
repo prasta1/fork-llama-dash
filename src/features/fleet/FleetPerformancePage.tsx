@@ -1,4 +1,5 @@
 import { RefreshCw } from 'lucide-react'
+import { useState } from 'react'
 import { PageHeader } from '../../components/PageHeader'
 import { RouteError } from '../../components/RouteError'
 import { cn } from '../../lib/cn'
@@ -14,8 +15,11 @@ type PerformanceRow = {
   outputTokens: number
 }
 
+const WINDOWS = [7, 30, 90] as const
+
 export function FleetPerformancePage() {
-  const { data, error, isRefetching, refetch } = useFleet()
+  const [windowDays, setWindowDays] = useState<number>(7)
+  const { data, error, isRefetching, refetch } = useFleet(windowDays)
 
   if (error) {
     return <RouteError kicker="dsh · fleet · perf" title="Failed to load performance" message={error.message} />
@@ -42,10 +46,26 @@ export function FleetPerformancePage() {
         <PageHeader
           kicker="dsh · fleet · perf"
           title="Performance"
-          subtitle="per-model averages from llama-swap activity · 7d"
+          subtitle={`per-model averages from llama-swap activity · ${windowDays}d`}
           variant="integrated"
           action={
             <div className="flex items-center gap-2">
+              <div className="flex items-center gap-px rounded border border-border bg-surface-2 p-px">
+                {WINDOWS.map((w) => (
+                  <button
+                    key={w}
+                    type="button"
+                    onClick={() => setWindowDays(w)}
+                    className={cn(
+                      'rounded px-2 py-1 font-mono text-[10px] transition-colors',
+                      windowDays === w ? 'bg-accent text-accent-on' : 'text-fg-dim hover:text-fg',
+                    )}
+                    aria-pressed={windowDays === w}
+                  >
+                    {w}d
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
                 className="btn btn-ghost btn-icon"
@@ -68,7 +88,7 @@ export function FleetPerformancePage() {
             <div className="empty-state px-6 max-md:px-3">loading performance…</div>
           ) : !hasActivity ? (
             <div className="empty-state px-6 py-4 max-md:px-3">
-              no activity recorded in the observation window.
+              no activity recorded in the last {windowDays} days.
             </div>
           ) : (
             <div className="overflow-auto">

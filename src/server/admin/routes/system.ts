@@ -90,14 +90,17 @@ export const systemRoutes: Route[] = [
   {
     method: 'GET',
     pattern: /^\/api\/fleet$/,
-    handler: async () => {
+    handler: async (request) => {
+      const url = new URL(request.url)
+      const rawWindow = Number(url.searchParams.get('window') ?? '7')
+      const windowDays = Number.isFinite(rawWindow) && rawWindow >= 1 ? Math.min(Math.round(rawWindow), 90) : 7
       const hosts = await Promise.all(
         fleet.map(async (host) => {
           const [health, models, running, activity] = await Promise.all([
             host.backend.health().catch(() => ({ reachable: false, error: 'unreachable' })),
             host.backend.listModels().catch(() => []),
             host.backend.listRunning?.().catch(() => []) ?? Promise.resolve([]),
-            Promise.resolve(readActivitySummary(host.activityStorePath)),
+            Promise.resolve(readActivitySummary(host.activityStorePath, windowDays)),
           ])
           return {
             id: host.id,

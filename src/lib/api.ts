@@ -135,7 +135,10 @@ export const api = {
   validateConfig: (content: string) =>
     sendJson('/api/config/validate', ApiConfigValidationSchema, { method: 'POST', body: { content } }),
   health: () => getJson('/api/health', ApiHealthSchema),
-  fleet: () => getJson('/api/fleet', FleetResponseSchema),
+  fleet: (windowDays?: number) => {
+    const q = windowDays != null ? `?window=${windowDays}` : ''
+    return getJson(`/api/fleet${q}`, FleetResponseSchema)
+  },
   loginMeta: () => getJson('/api/login-meta', LoginMetaSchema),
   systemStatus: () => getJson('/api/system', ApiSystemStatusSchema),
   requestStats: () => getJson('/api/requests/stats', ApiRequestStatsSchema),

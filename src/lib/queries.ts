@@ -91,10 +91,10 @@ export function useHealth(): UseQueryResult<ApiHealth> {
   })
 }
 
-export function useFleet(): UseQueryResult<ApiFleetResponse> {
+export function useFleet(windowDays?: number): UseQueryResult<ApiFleetResponse> {
   return useQuery({
-    queryKey: qk.fleet,
-    queryFn: () => api.fleet(),
+    queryKey: [...qk.fleet, windowDays ?? 7] as const,
+    queryFn: () => api.fleet(windowDays),
     refetchInterval: POLL_MS,
   })
 }
