@@ -109,9 +109,7 @@ function HostCard({ host }: { host: ApiFleetHost }) {
               <tr>
                 <th style={{ width: 18 }} aria-label="state" />
                 <th className="mono">id</th>
-                <th style={{ width: 90 }} className="hide-mobile">
-                  state
-                </th>
+                <th style={{ width: 90 }}>state</th>
               </tr>
             </thead>
             <tbody>
@@ -124,7 +122,7 @@ function HostCard({ host }: { host: ApiFleetHost }) {
                       <StatusDot tone={stateTone(state, m.running)} live={m.running} />
                     </td>
                     <td className="mono break-all">{m.id}</td>
-                    <td className="hide-mobile font-mono text-[11px] text-fg-dim">{state}</td>
+                    <td className="font-mono text-[11px] text-fg-dim">{state}</td>
                   </tr>
                 )
               })}
