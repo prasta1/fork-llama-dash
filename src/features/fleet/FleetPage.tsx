@@ -7,7 +7,8 @@ import { useFleet } from '../../lib/queries'
 import type { ApiFleetHost } from '../../lib/schemas/fleet'
 
 export function FleetPage() {
-  const { data, error, isRefetching, refetch } = useFleet()
+  const { data, error, isRefetching, refetch, dataUpdatedAt } = useFleet()
+  const lastUpdated = dataUpdatedAt > 0 ? new Date(dataUpdatedAt).toLocaleTimeString() : null
 
   if (error) {
     return <RouteError kicker="dsh · fleet" title="Failed to load fleet" message={error.message} />
@@ -23,6 +24,11 @@ export function FleetPage() {
           variant="integrated"
           action={
             <div className="flex items-center gap-2">
+              {lastUpdated ? (
+                <span className="font-mono text-[10px] text-fg-dim" title={`last updated ${lastUpdated}`}>
+                  {lastUpdated}
+                </span>
+              ) : null}
               <button
                 type="button"
                 className="btn btn-ghost btn-icon"

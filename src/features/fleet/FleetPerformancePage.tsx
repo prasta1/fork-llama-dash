@@ -69,7 +69,8 @@ export function FleetPerformancePage() {
   const [windowDays, setWindowDays] = useState<number>(7)
   const [sortKey, setSortKey] = useState<SortKey>('requests')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
-  const { data, error, isRefetching, refetch } = useFleet(windowDays)
+  const { data, error, isRefetching, refetch, dataUpdatedAt } = useFleet(windowDays)
+  const lastUpdated = dataUpdatedAt > 0 ? new Date(dataUpdatedAt).toLocaleTimeString() : null
 
   if (error) {
     return <RouteError kicker="dsh · fleet · perf" title="Failed to load performance" message={error.message} />
@@ -111,6 +112,11 @@ export function FleetPerformancePage() {
           variant="integrated"
           action={
             <div className="flex items-center gap-2">
+              {lastUpdated ? (
+                <span className="font-mono text-[10px] text-fg-dim" title={`last updated ${lastUpdated}`}>
+                  {lastUpdated}
+                </span>
+              ) : null}
               <div className="flex items-center gap-px rounded border border-border bg-surface-2 p-px">
                 {WINDOWS.map((w) => (
                   <button
