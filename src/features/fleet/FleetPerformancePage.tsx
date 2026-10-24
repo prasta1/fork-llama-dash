@@ -213,7 +213,9 @@ export function FleetPerformancePage() {
                       <td className="num hide-mobile font-mono text-[11px] text-fg-dim">
                         {r.avgDurationMs != null ? r.avgDurationMs.toFixed(0) : '—'}
                       </td>
-                      <td className="num hide-mobile font-mono text-[11px] text-fg-dim">{r.requests}</td>
+                      <td className="num hide-mobile font-mono text-[11px] text-fg-dim">
+                        {r.requests >= 1000 ? `${(r.requests / 1000).toFixed(1)}k` : r.requests}
+                      </td>
                       <td className="num hide-mobile font-mono text-[11px] text-fg-dim">
                         {r.outputTokens >= 1000 ? `${(r.outputTokens / 1000).toFixed(0)}k` : r.outputTokens}
                       </td>
