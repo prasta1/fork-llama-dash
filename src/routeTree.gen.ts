@@ -26,6 +26,7 @@ import { Route as KeysIndexRouteImport } from './routes/keys.index'
 import { Route as RequestsIdRouteImport } from './routes/requests.$id'
 import { Route as ModelsIdRouteImport } from './routes/models.$id'
 import { Route as KeysIdRouteImport } from './routes/keys.$id'
+import { Route as FleetPerformanceRouteImport } from './routes/fleet.performance'
 
 const SystemRoute = SystemRouteImport.update({
   id: '/system',
@@ -112,19 +113,25 @@ const KeysIdRoute = KeysIdRouteImport.update({
   path: '/keys/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FleetPerformanceRoute = FleetPerformanceRouteImport.update({
+  id: '/performance',
+  path: '/performance',
+  getParentRoute: () => FleetRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/attribution': typeof AttributionRoute
   '/config': typeof ConfigRoute
   '/endpoints': typeof EndpointsRoute
-  '/fleet': typeof FleetRoute
+  '/fleet': typeof FleetRouteWithChildren
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
   '/playground': typeof PlaygroundRoute
   '/policies': typeof PoliciesRoute
   '/settings': typeof SettingsRoute
   '/system': typeof SystemRoute
+  '/fleet/performance': typeof FleetPerformanceRoute
   '/keys/$id': typeof KeysIdRoute
   '/models/$id': typeof ModelsIdRoute
   '/requests/$id': typeof RequestsIdRoute
@@ -137,13 +144,14 @@ export interface FileRoutesByTo {
   '/attribution': typeof AttributionRoute
   '/config': typeof ConfigRoute
   '/endpoints': typeof EndpointsRoute
-  '/fleet': typeof FleetRoute
+  '/fleet': typeof FleetRouteWithChildren
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
   '/playground': typeof PlaygroundRoute
   '/policies': typeof PoliciesRoute
   '/settings': typeof SettingsRoute
   '/system': typeof SystemRoute
+  '/fleet/performance': typeof FleetPerformanceRoute
   '/keys/$id': typeof KeysIdRoute
   '/models/$id': typeof ModelsIdRoute
   '/requests/$id': typeof RequestsIdRoute
@@ -157,13 +165,14 @@ export interface FileRoutesById {
   '/attribution': typeof AttributionRoute
   '/config': typeof ConfigRoute
   '/endpoints': typeof EndpointsRoute
-  '/fleet': typeof FleetRoute
+  '/fleet': typeof FleetRouteWithChildren
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
   '/playground': typeof PlaygroundRoute
   '/policies': typeof PoliciesRoute
   '/settings': typeof SettingsRoute
   '/system': typeof SystemRoute
+  '/fleet/performance': typeof FleetPerformanceRoute
   '/keys/$id': typeof KeysIdRoute
   '/models/$id': typeof ModelsIdRoute
   '/requests/$id': typeof RequestsIdRoute
@@ -185,6 +194,7 @@ export interface FileRouteTypes {
     | '/policies'
     | '/settings'
     | '/system'
+    | '/fleet/performance'
     | '/keys/$id'
     | '/models/$id'
     | '/requests/$id'
@@ -204,6 +214,7 @@ export interface FileRouteTypes {
     | '/policies'
     | '/settings'
     | '/system'
+    | '/fleet/performance'
     | '/keys/$id'
     | '/models/$id'
     | '/requests/$id'
@@ -223,6 +234,7 @@ export interface FileRouteTypes {
     | '/policies'
     | '/settings'
     | '/system'
+    | '/fleet/performance'
     | '/keys/$id'
     | '/models/$id'
     | '/requests/$id'
@@ -236,7 +248,7 @@ export interface RootRouteChildren {
   AttributionRoute: typeof AttributionRoute
   ConfigRoute: typeof ConfigRoute
   EndpointsRoute: typeof EndpointsRoute
-  FleetRoute: typeof FleetRoute
+  FleetRoute: typeof FleetRouteWithChildren
   LoginRoute: typeof LoginRoute
   LogsRoute: typeof LogsRoute
   PlaygroundRoute: typeof PlaygroundRoute
@@ -372,15 +384,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KeysIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/fleet/performance': {
+      id: '/fleet/performance'
+      path: '/performance'
+      fullPath: '/fleet/performance'
+      preLoaderRoute: typeof FleetPerformanceRouteImport
+      parentRoute: typeof FleetRoute
+    }
   }
 }
+
+interface FleetRouteChildren {
+  FleetPerformanceRoute: typeof FleetPerformanceRoute
+}
+
+const FleetRouteChildren: FleetRouteChildren = {
+  FleetPerformanceRoute: FleetPerformanceRoute,
+}
+
+const FleetRouteWithChildren = FleetRoute._addFileChildren(FleetRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AttributionRoute: AttributionRoute,
   ConfigRoute: ConfigRoute,
   EndpointsRoute: EndpointsRoute,
-  FleetRoute: FleetRoute,
+  FleetRoute: FleetRouteWithChildren,
   LoginRoute: LoginRoute,
   LogsRoute: LogsRoute,
   PlaygroundRoute: PlaygroundRoute,

@@ -3,6 +3,7 @@ import { useHotkeySequence } from '@tanstack/react-hotkeys'
 import { Link, useNavigate } from '@tanstack/react-router'
 import Avatar from 'boring-avatars'
 import {
+  Activity,
   Boxes,
   Fingerprint,
   KeyRound,
@@ -37,6 +38,7 @@ import { Tooltip } from './Tooltip'
 type NavTarget =
   | '/'
   | '/fleet'
+  | '/fleet/performance'
   | '/models'
   | '/requests'
   | '/logs'
@@ -73,6 +75,7 @@ const SECTIONS: ReadonlyArray<NavSection> = [
     items: [
       { to: '/', label: 'Dashboard', leader: 'd', Icon: LayoutDashboard },
       { to: '/fleet', label: 'Fleet', leader: 'f', Icon: Boxes },
+      { to: '/fleet/performance', label: 'Performance', leader: 'p', Icon: Activity },
       { to: '/requests', label: 'Requests', leader: 'r', Icon: ScrollText },
       { to: '/logs', label: 'Logs', leader: 'l', Icon: Terminal },
       { to: '/system', label: 'System', leader: 's', Icon: ServerCog },

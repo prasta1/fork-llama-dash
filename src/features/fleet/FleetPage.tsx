@@ -40,29 +40,21 @@ export function FleetPage() {
           }
         />
 
-        {data != null ? (
-          <>
-            <section className="panel !rounded-none !border-x-0 !border-b !bg-surface-1">
-              {data.hosts.length === 0 ? (
-                <div className="empty-state px-6 max-md:px-3">
-                  no fleet hosts configured. set FLEET_HOSTS to add secondary llama-swap instances.
-                </div>
-              ) : (
-                <div className="grid auto-rows-min gap-4 p-4 max-md:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
-                  {data.hosts.map((host) => (
-                    <HostCard key={host.id} host={host} />
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <PerformanceSection hosts={data.hosts} />
-          </>
-        ) : (
-          <section className="panel !rounded-none !border-x-0 !bg-surface-1 flex flex-1 flex-col">
+        <section className="panel !rounded-none !border-x-0 !bg-surface-1">
+          {data == null ? (
             <div className="empty-state px-6 max-md:px-3">loading fleet…</div>
-          </section>
-        )}
+          ) : data.hosts.length === 0 ? (
+            <div className="empty-state px-6 max-md:px-3">
+              no fleet hosts configured. set FLEET_HOSTS to add secondary llama-swap instances.
+            </div>
+          ) : (
+            <div className="grid auto-rows-min gap-4 p-4 max-md:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+              {data.hosts.map((host) => (
+                <HostCard key={host.id} host={host} />
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   )
@@ -129,83 +121,5 @@ function HostCard({ host }: { host: ApiFleetHost }) {
         )}
       </div>
     </div>
-  )
-}
-
-type PerformanceRow = {
-  hostId: string
-  hostLabel: string
-  model: string
-  avgTokensPerSecond: number | null
-  requests: number
-  outputTokens: number
-}
-
-function PerformanceSection({ hosts }: { hosts: ApiFleetHost[] }) {
-  const rows: PerformanceRow[] = hosts.flatMap((host) =>
-    host.activity.models.map((m) => ({
-      hostId: host.id,
-      hostLabel: host.label,
-      model: m.model,
-      avgTokensPerSecond: m.avgTokensPerSecond,
-      requests: m.requests,
-      outputTokens: m.outputTokens,
-    })),
-  )
-
-  rows.sort((a, b) => b.requests - a.requests)
-
-  const hasActivity = hosts.some((h) => h.activity.available && h.activity.models.length > 0)
-
-  return (
-    <section className="panel !rounded-none !border-x-0 !bg-surface-1">
-      <div className="px-4 pt-4 pb-2">
-        <h2 className="m-0 font-mono text-xs font-medium tracking-wide text-fg">Performance</h2>
-        <p className="m-0 mt-0.5 font-mono text-[10px] text-fg-dim">
-          per-model averages from llama-swap activity · 7d
-        </p>
-      </div>
-      {!hasActivity ? (
-        <div className="empty-state px-6 pb-4 max-md:px-3">no activity recorded in the observation window.</div>
-      ) : (
-        <div className="overflow-auto">
-          <table className="dtable">
-            <thead>
-              <tr>
-                <th className="mono" style={{ minWidth: 120 }}>
-                  host
-                </th>
-                <th className="mono">model</th>
-                <th className="num">tok/s</th>
-                <th className="num hide-mobile">reqs</th>
-                <th className="num hide-mobile">out tok</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={`${r.hostId}:${r.model}`}>
-                  <td className="mono text-[11px] text-fg-muted">
-                    {r.hostLabel}
-                    {hosts.find((h) => h.id === r.hostId)?.primary ? (
-                      <span className="ml-1.5 rounded bg-accent/15 px-1 py-px font-mono text-[9px] uppercase tracking-[0.12em] text-accent">
-                        primary
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="mono break-all">{r.model}</td>
-                  <td className="num font-mono text-[11px] text-fg">
-                    {r.avgTokensPerSecond != null ? r.avgTokensPerSecond.toFixed(1) : '—'}
-                  </td>
-                  <td className="num hide-mobile font-mono text-[11px] text-fg-dim">{r.requests}</td>
-                  <td className="num hide-mobile font-mono text-[11px] text-fg-dim">
-                    {r.outputTokens >= 1000 ? `${(r.outputTokens / 1000).toFixed(0)}k` : r.outputTokens}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
   )
 }
