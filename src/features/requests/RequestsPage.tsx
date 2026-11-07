@@ -12,7 +12,9 @@ import { cn } from '../../lib/cn'
 import { formatCompactNumber } from '../../lib/format'
 import { isTypingTarget } from '../../lib/is-typing-target'
 import { isLeaderPending } from '../../lib/nav-leader'
-import { useAttributionSettings, useRequestHistogram, useRequestsList } from '../../lib/queries'
+import { useAttributionSettings, useNodes, useRequestHistogram, useRequestsList } from '../../lib/queries'
+import { assignSeriesSteps } from '../../lib/series-color'
+import { NodeBadge } from '../../components/NodeBadge'
 import { useMediaQuery } from '../../lib/use-media-query'
 import { formatCostUsd } from './requestDetailUtils'
 import { RequestsHistogram } from './RequestsHistogram'
@@ -57,6 +59,7 @@ export function RequestsPage() {
   const routingFilter: RoutingFilter = routeSearch.routing ?? 'all'
   const clientFilter = routeSearch.client ?? ''
   const hostFilter: string = routeSearch.host ?? 'all'
+  const nodeFilter: string = routeSearch.node ?? 'all'
   const endUserFilter = routeSearch.endUser ?? ''
   const sessionFilter = routeSearch.session ?? ''
   const [searchDraft, setSearchDraft] = useState(search)
@@ -114,9 +117,18 @@ export function RequestsPage() {
     return Array.from(set).sort()
   }, [allRows])
 
+  const { data: nodesData } = useNodes()
+  const multiNode = (nodesData?.nodes.length ?? 0) > 1
+  const nodeInfo = useMemo(() => {
+    const nodes = nodesData?.nodes ?? []
+    const steps = assignSeriesSteps(nodes.map((n) => n.id))
+    return new Map(nodes.map((n) => [n.id, { label: n.label, step: steps.get(n.id) ?? 0 }]))
+  }, [nodesData])
+
   const filtered = useMemo(
     () =>
       applyRequestFilters(allRows, {
+        nodeFilter,
         statusFilter,
         modelFilter,
         keyFilter,
@@ -129,6 +141,7 @@ export function RequestsPage() {
       }),
     [
       allRows,
+      nodeFilter,
       statusFilter,
       modelFilter,
       keyFilter,
@@ -176,6 +189,7 @@ export function RequestsPage() {
   const dropApiKey = useMediaQuery('(max-width: 900px)')
   const visibleCols = useMemo(() => {
     const set = new Set<RequestsColKey>(REQUESTS_ALL_COLS)
+    if (!multiNode || dropApiKey) set.delete('node')
     if (dropApiKey) set.delete('apiKey')
     if (dropCacheCost) {
       set.delete('cache')
@@ -186,9 +200,10 @@ export function RequestsPage() {
       set.delete('tokOut')
     }
     return set
-  }, [dropApiKey, dropCacheCost, dropTokens])
+  }, [multiNode, dropApiKey, dropCacheCost, dropTokens])
   const colWidths = useMemo(() => colWidthsFor(visibleCols), [visibleCols])
   const showApiKey = visibleCols.has('apiKey')
+  const showNode = visibleCols.has('node')
   const showCache = visibleCols.has('cache')
   const showCost = visibleCols.has('cost')
   const showTokIn = visibleCols.has('tokIn')
@@ -283,6 +298,7 @@ export function RequestsPage() {
     showMcpRelays ||
     clientFilter !== '' ||
     hostFilter !== 'all' ||
+    nodeFilter !== 'all' ||
     endUserFilter !== '' ||
     sessionFilter !== ''
 
@@ -424,6 +440,24 @@ export function RequestsPage() {
                 </span>
               </label>
 
+              {multiNode ? (
+                <div className="mb-4 flex flex-col gap-1.5">
+                  <div className="text-[10px] uppercase tracking-[0.12em] text-fg-dim">Node</div>
+                  <select
+                    className="select-native h-8 w-full cursor-pointer rounded border border-border-strong bg-surface-2 px-2.5 font-mono text-xs text-fg outline-none transition-[border-color,box-shadow] duration-100 focus:border-accent focus:[box-shadow:var(--shadow-focus)]"
+                    value={nodeFilter}
+                    onChange={(e) => updateSearch({ node: e.target.value })}
+                  >
+                    <option value="all">All nodes</option>
+                    {[...nodeInfo].map(([id, { label }]) => (
+                      <option key={id} value={id}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+
               <div className="mb-4 flex flex-col gap-1.5">
                 <div className="text-[10px] uppercase tracking-[0.12em] text-fg-dim">Host</div>
                 <select
@@ -515,6 +549,7 @@ export function RequestsPage() {
                       routing: undefined,
                       mcp: undefined,
                       host: undefined,
+                      node: undefined,
                       client: undefined,
                       endUser: undefined,
                       session: undefined,
@@ -583,6 +618,7 @@ export function RequestsPage() {
                           <th className="mono">endpoint</th>
                           {showApiKey ? <th>api key</th> : null}
                           <th>model</th>
+                          {showNode ? <th>node</th> : null}
                           <RequestsSortHeader field="statusCode" current={sortKey} dir={sortDir} onToggle={toggleSort}>
                             status
                           </RequestsSortHeader>
@@ -685,6 +721,18 @@ export function RequestsPage() {
                                         ) : null}
                                       </div>
                                     </td>
+                                    {showNode ? (
+                                      <td translate="no">
+                                        {r.nodeId && nodeInfo.has(r.nodeId) ? (
+                                          <NodeBadge
+                                            label={nodeInfo.get(r.nodeId)!.label}
+                                            step={nodeInfo.get(r.nodeId)!.step}
+                                          />
+                                        ) : (
+                                          <span className="text-fg-faint">{r.nodeId ?? '—'}</span>
+                                        )}
+                                      </td>
+                                    ) : null}
                                     <td>
                                       <StatusCell code={r.statusCode} streamed={r.streamed} />
                                     </td>
@@ -732,6 +780,7 @@ function isMcpRelayRequest(row: { requestClass: string }): boolean {
 }
 
 type RequestFilterRow = {
+  nodeId: string | null
   statusCode: number
   model: string | null
   keyName: string | null
@@ -748,6 +797,7 @@ type RequestFilterRow = {
 function applyRequestFilters<T extends RequestFilterRow>(
   rows: T[],
   filters: {
+    nodeFilter: string
     statusFilter: StatusFilter
     modelFilter: string
     keyFilter: string
@@ -769,6 +819,8 @@ function applyRequestFilters<T extends RequestFilterRow>(
   else if (filters.statusFilter === 'err') out = out.filter((r) => r.statusCode >= 400)
 
   if (filters.modelFilter !== 'all') out = out.filter((r) => r.model === filters.modelFilter)
+
+  if (filters.nodeFilter !== 'all') out = out.filter((r) => r.nodeId === filters.nodeFilter)
 
   if (filters.keyFilter !== 'all') {
     out = out.filter((r) => requestMatchesKeyFilter(r, filters.keyFilter))

@@ -10,6 +10,7 @@ export type RequestsSearch = {
   key?: string
   routing?: RoutingFilter
   host?: string
+  node?: string
   client?: string
   endUser?: string
   session?: string
@@ -46,6 +47,7 @@ export const Route = createFileRoute('/requests/')({
     key: asString(search.key),
     routing: asEnum(search.routing, ROUTING_VALUES),
     host: asString(search.host),
+    node: asString(search.node),
     client: asString(search.client),
     endUser: asString(search.endUser),
     session: asString(search.session),

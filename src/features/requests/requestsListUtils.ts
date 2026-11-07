@@ -8,6 +8,7 @@ export type RequestsColKey =
   | 'endpoint'
   | 'apiKey'
   | 'model'
+  | 'node'
   | 'status'
   | 'tokIn'
   | 'tokOut'
@@ -20,6 +21,7 @@ const ALL_COL_WIDTHS: Record<RequestsColKey, number | string> = {
   endpoint: '18%',
   apiKey: '12%',
   model: '20%',
+  node: 100,
   status: 70,
   tokIn: 80,
   tokOut: 80,
@@ -33,6 +35,7 @@ export const REQUESTS_ALL_COLS: readonly RequestsColKey[] = [
   'endpoint',
   'apiKey',
   'model',
+  'node',
   'status',
   'tokIn',
   'tokOut',
@@ -45,7 +48,8 @@ export function colWidthsFor(visible: ReadonlySet<RequestsColKey>): (number | st
   return REQUESTS_ALL_COLS.filter((k) => visible.has(k)).map((k) => ALL_COL_WIDTHS[k])
 }
 
-export const REQUESTS_COL_WIDTHS = colWidthsFor(new Set(REQUESTS_ALL_COLS))
+// Default (single-host) layout: the node column only exists for multi-host fleets.
+export const REQUESTS_COL_WIDTHS = colWidthsFor(new Set(REQUESTS_ALL_COLS.filter((k) => k !== 'node')))
 
 export type SortKey = 'startedAt' | 'durationMs' | 'statusCode' | 'totalTokens'
 export type SortDir = 'asc' | 'desc'
