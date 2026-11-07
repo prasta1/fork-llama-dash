@@ -42,6 +42,9 @@ const config = defineConfig(({ mode }) => {
     resolve: { tsconfigPaths: true },
     plugins: [
       devtools({
+        // Piping mirrors browser warnings to the terminal and terminal output back to the browser, which
+        // can feed on itself: one duplicate-hotkey warning once grew the dev log to 5.7 GB.
+        consolePiping: { enabled: false },
         editor: {
           name: 'macOS open',
           open: async (path) => {
