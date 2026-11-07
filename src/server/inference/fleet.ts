@@ -16,9 +16,9 @@ export type FleetHost = {
 
 /**
  * The fleet is the set of llama-swap instances llama-dash can observe.
- * The primary (from INFERENCE_BASE_URL) is always first and is the only one
- * the proxy routes to. Secondaries come from FLEET_HOSTS (comma-separated
- * `id=url` pairs) and are read-only — observed, never routed to.
+ * The primary (from INFERENCE_BASE_URL) is always first. Secondaries come from
+ * FLEET_HOSTS (comma-separated `id=url` pairs) and are observed only; the proxy
+ * routes to them only when FLEET_ROUTING is on.
  */
 function parseFleetHosts(): Array<{ id: string; url: string }> {
   const raw = config.fleetHosts.trim()

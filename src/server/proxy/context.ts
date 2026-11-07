@@ -16,7 +16,7 @@ import { filterRequestHeaders, redactInjectedHeaders } from './headers.ts'
 import { proxyRoutingNeedsBody } from './routing.ts'
 import type { RoutingOutcome, TransformResult } from './transforms.ts'
 import { emptyRoutingOutcome } from './transforms.ts'
-import { selectUpstream } from './upstream.ts'
+import { resolveNodeRoute, selectUpstream } from './upstream.ts'
 import { REDACTED_INJECTED_CREDENTIAL } from './credential-placeholders.ts'
 import { emptyCompressionOutcome, type CompressionOutcome } from './context-compression.ts'
 
@@ -91,11 +91,12 @@ export function applyTransformResultToContext(ctx: ProxyContext, transform: Extr
 
 export function finalizeRoutingAndBody(ctx: ProxyContext) {
   if (!ctx.body) return
-  if (!ctx.body.hasBody) {
-    ctx.upstream = selectUpstream(ctx.defaultUpstream, ctx.routingOutcome, ctx.endpoint, ctx.url.search)
-    return
-  }
-  ctx.upstream = selectUpstream(ctx.defaultUpstream, ctx.routingOutcome, ctx.endpoint, ctx.url.search)
+  // ctx.body.reqModel is re-extracted after transforms, so it is the post-alias, post-rewrite model.
+  const node = resolveNodeRoute(ctx.body.reqModel, ctx.endpoint, ctx.url.search)
+  ctx.upstream = selectUpstream(ctx.defaultUpstream, ctx.routingOutcome, ctx.endpoint, ctx.url.search, node)
+  // A direct (cloud) target bypasses the fleet, so no node served the request.
+  ctx.nodeId = ctx.routingOutcome.targetType === 'direct' ? null : node.nodeId
+  if (!ctx.body.hasBody) return
   applyProxyBodyHeaders(ctx.body, ctx.reqHeaders)
   restoreProxyBodyContentLength(ctx.body, ctx.request, ctx.reqHeaders)
 }
