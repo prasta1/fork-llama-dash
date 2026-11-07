@@ -57,6 +57,7 @@ function row(overrides: Partial<RequestLogInput> = {}): RequestLogInput {
     responseBody: null,
     streamCloseMs: null,
     keyId: null,
+    nodeId: null,
     clientHost: null,
     clientName: null,
     endUserId: null,
