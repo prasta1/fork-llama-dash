@@ -136,9 +136,7 @@ export function FleetPerformancePage() {
           {data == null ? (
             <div className="empty-state px-6 max-md:px-3">loading performance…</div>
           ) : !hasActivity ? (
-            <div className="empty-state px-6 py-4 max-md:px-3">
-              no activity recorded in the last {windowDays} days.
-            </div>
+            <div className="empty-state px-6 py-4 max-md:px-3">no activity recorded in the last {windowDays} days.</div>
           ) : (
             <div className="overflow-auto">
               <table className="dtable">

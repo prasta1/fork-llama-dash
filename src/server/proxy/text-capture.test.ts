@@ -21,7 +21,8 @@ describe('BoundedTextCapture', () => {
 
   it('keeps the usage block when a long body is truncated', () => {
     const capture = new BoundedTextCapture(10)
-    const body = '{"content":"' + 'x'.repeat(100) + '","usage":{"prompt_tokens":14,"completion_tokens":8,"total_tokens":22}}'
+    const body =
+      '{"content":"' + 'x'.repeat(100) + '","usage":{"prompt_tokens":14,"completion_tokens":8,"total_tokens":22}}'
     capture.append(body)
 
     expect(capture.text()).toContain('[truncated')
