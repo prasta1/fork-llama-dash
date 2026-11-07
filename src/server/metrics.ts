@@ -1,10 +1,11 @@
 import { count, gte, sql } from 'drizzle-orm'
 import { getGpuSnapshot } from './gpu-poller.ts'
-import { inferenceBackend } from './inference/backend.ts'
+import { fleet } from './inference/fleet.ts'
 import { getRequestLogQueueStats } from './proxy/log.ts'
 import { db, schema } from './db/index.ts'
 
 type RequestMetricRow = {
+  nodeId: string | null
   endpoint: string
   model: string | null
   statusCode: number
@@ -13,6 +14,7 @@ type RequestMetricRow = {
 }
 
 type TokenMetricRow = {
+  nodeId: string | null
   model: string | null
   promptTokens: number | null
   completionTokens: number | null
@@ -50,6 +52,11 @@ function normalizeEndpoint(endpoint: string): string {
   return ENDPOINT_ALLOWLIST.has(endpoint) ? endpoint : 'other'
 }
 
+/** Rows logged before multi-node, or served by a direct (cloud) target, have no node. */
+function normalizeNode(nodeId: string | null): string {
+  return nodeId || 'unknown'
+}
+
 function normalizeModel(model: string | null): string {
   return model || 'unknown'
 }
@@ -72,14 +79,32 @@ function credentialInjectionCounts(row: CredentialInjectionMetricRow | undefined
   return { success: row?.success ?? 0, failure: row?.failure ?? 0 }
 }
 
-async function upstreamMetrics(): Promise<{ reachable: number; latencySeconds: number }> {
-  const health = await inferenceBackend.ping()
-  return { reachable: health.reachable ? 1 : 0, latencySeconds: (health.latencyMs ?? 0) / 1_000 }
+async function upstreamMetrics(): Promise<
+  Array<{ nodeId: string; reachable: number; latencySeconds: number; runningModels: number }>
+> {
+  return Promise.all(
+    fleet.map(async (host) => {
+      const [health, runningModels] = await Promise.all([
+        host.backend.ping(),
+        (host.backend.listRunning?.() ?? Promise.resolve([])).then(
+          (result) => result.length,
+          () => 0,
+        ),
+      ])
+      return {
+        nodeId: host.id,
+        reachable: health.reachable ? 1 : 0,
+        latencySeconds: (health.latencyMs ?? 0) / 1_000,
+        runningModels,
+      }
+    }),
+  )
 }
 
 export async function renderPrometheusMetrics(): Promise<string> {
   const requestRows = db
     .select({
+      nodeId: schema.requests.nodeId,
       endpoint: schema.requests.endpoint,
       model: schema.requests.model,
       statusCode: schema.requests.statusCode,
@@ -87,11 +112,18 @@ export async function renderPrometheusMetrics(): Promise<string> {
       count: count(),
     })
     .from(schema.requests)
-    .groupBy(schema.requests.endpoint, schema.requests.model, schema.requests.statusCode, schema.requests.streamed)
+    .groupBy(
+      schema.requests.nodeId,
+      schema.requests.endpoint,
+      schema.requests.model,
+      schema.requests.statusCode,
+      schema.requests.streamed,
+    )
     .all()
 
   const tokenRows = db
     .select({
+      nodeId: schema.requests.nodeId,
       model: schema.requests.model,
       promptTokens: sql<number>`coalesce(sum(${schema.requests.promptTokens}), 0)`,
       completionTokens: sql<number>`coalesce(sum(${schema.requests.completionTokens}), 0)`,
@@ -100,12 +132,12 @@ export async function renderPrometheusMetrics(): Promise<string> {
       totalTokens: sql<number>`coalesce(sum(${schema.requests.totalTokens}), 0)`,
     })
     .from(schema.requests)
-    .groupBy(schema.requests.model)
+    .groupBy(schema.requests.nodeId, schema.requests.model)
     .all() as TokenMetricRow[]
 
   const thirtyMinutesAgo = new Date(Date.now() - 30 * 60_000)
   const latencyRows = db
-    .select({ durationMs: schema.requests.durationMs })
+    .select({ durationMs: schema.requests.durationMs, nodeId: schema.requests.nodeId })
     .from(schema.requests)
     .where(gte(schema.requests.startedAt, thirtyMinutesAgo))
     .all()
@@ -120,13 +152,7 @@ export async function renderPrometheusMetrics(): Promise<string> {
 
   const queue = getRequestLogQueueStats()
   const gpu = getGpuSnapshot()
-  const [upstream, runningModels] = await Promise.all([
-    upstreamMetrics(),
-    (inferenceBackend.listRunning?.() ?? Promise.resolve([])).then(
-      (result) => result.length,
-      () => 0,
-    ),
-  ])
+  const upstream = await upstreamMetrics()
   const lines: string[] = []
 
   lines.push('# HELP llama_dash_process_uptime_seconds Process uptime in seconds.')
@@ -138,6 +164,7 @@ export async function renderPrometheusMetrics(): Promise<string> {
   for (const row of requestRows as RequestMetricRow[]) {
     lines.push(
       metricLine('llama_dash_requests_total', row.count, {
+        node: normalizeNode(row.nodeId),
         endpoint: normalizeEndpoint(row.endpoint),
         model: normalizeModel(row.model),
         status_class: statusClass(row.statusCode),
@@ -149,12 +176,15 @@ export async function renderPrometheusMetrics(): Promise<string> {
   lines.push('# HELP llama_dash_tokens_total Total logged tokens by model and token type.')
   lines.push('# TYPE llama_dash_tokens_total counter')
   for (const row of tokenRows) {
+    const node = normalizeNode(row.nodeId)
     const model = normalizeModel(row.model)
-    lines.push(metricLine('llama_dash_tokens_total', row.promptTokens ?? 0, { model, type: 'prompt' }))
-    lines.push(metricLine('llama_dash_tokens_total', row.completionTokens ?? 0, { model, type: 'completion' }))
-    lines.push(metricLine('llama_dash_tokens_total', row.cacheCreationTokens ?? 0, { model, type: 'cache_creation' }))
-    lines.push(metricLine('llama_dash_tokens_total', row.cacheReadTokens ?? 0, { model, type: 'cache_read' }))
-    lines.push(metricLine('llama_dash_tokens_total', row.totalTokens ?? 0, { model, type: 'total' }))
+    lines.push(metricLine('llama_dash_tokens_total', row.promptTokens ?? 0, { node, model, type: 'prompt' }))
+    lines.push(metricLine('llama_dash_tokens_total', row.completionTokens ?? 0, { node, model, type: 'completion' }))
+    lines.push(
+      metricLine('llama_dash_tokens_total', row.cacheCreationTokens ?? 0, { node, model, type: 'cache_creation' }),
+    )
+    lines.push(metricLine('llama_dash_tokens_total', row.cacheReadTokens ?? 0, { node, model, type: 'cache_read' }))
+    lines.push(metricLine('llama_dash_tokens_total', row.totalTokens ?? 0, { node, model, type: 'total' }))
   }
 
   const credentialInjections = credentialInjectionCounts(credentialInjectionRow)
@@ -163,13 +193,22 @@ export async function renderPrometheusMetrics(): Promise<string> {
   lines.push(metricLine('llama_dash_credential_injections_total', credentialInjections.success, { result: 'success' }))
   lines.push(metricLine('llama_dash_credential_injections_total', credentialInjections.failure, { result: 'failure' }))
 
-  const latencies = latencyRows.map((row) => row.durationMs)
+  // Per node, so a slow host isn't averaged away by a fast one. Every fleet host gets a series even when idle.
+  const latenciesByNode = new Map<string, number[]>(fleet.map((host) => [host.id, []]))
+  for (const row of latencyRows) {
+    const node = normalizeNode(row.nodeId)
+    latenciesByNode.set(node, [...(latenciesByNode.get(node) ?? []), row.durationMs])
+  }
   lines.push('# HELP llama_dash_request_duration_p50_seconds_30m Request duration p50 over the last 30 minutes.')
   lines.push('# TYPE llama_dash_request_duration_p50_seconds_30m gauge')
-  lines.push(metricLine('llama_dash_request_duration_p50_seconds_30m', percentile(latencies, 0.5)))
+  for (const [node, latencies] of latenciesByNode) {
+    lines.push(metricLine('llama_dash_request_duration_p50_seconds_30m', percentile(latencies, 0.5), { node }))
+  }
   lines.push('# HELP llama_dash_request_duration_p95_seconds_30m Request duration p95 over the last 30 minutes.')
   lines.push('# TYPE llama_dash_request_duration_p95_seconds_30m gauge')
-  lines.push(metricLine('llama_dash_request_duration_p95_seconds_30m', percentile(latencies, 0.95)))
+  for (const [node, latencies] of latenciesByNode) {
+    lines.push(metricLine('llama_dash_request_duration_p95_seconds_30m', percentile(latencies, 0.95), { node }))
+  }
 
   lines.push('# HELP llama_dash_log_queue_depth Request log rows waiting to be written.')
   lines.push('# TYPE llama_dash_log_queue_depth gauge')
@@ -178,16 +217,20 @@ export async function renderPrometheusMetrics(): Promise<string> {
   lines.push('# TYPE llama_dash_log_queue_dropped_total counter')
   lines.push(metricLine('llama_dash_log_queue_dropped_total', queue.dropped))
 
-  lines.push('# HELP llama_dash_upstream_reachable Whether inference backend health is reachable.')
+  lines.push("# HELP llama_dash_upstream_reachable Whether each fleet host's inference backend is reachable.")
   lines.push('# TYPE llama_dash_upstream_reachable gauge')
-  lines.push(metricLine('llama_dash_upstream_reachable', upstream.reachable))
-  lines.push('# HELP llama_dash_upstream_latency_seconds Inference backend health check latency.')
+  for (const host of upstream)
+    lines.push(metricLine('llama_dash_upstream_reachable', host.reachable, { node: host.nodeId }))
+  lines.push('# HELP llama_dash_upstream_latency_seconds Inference backend health check latency per fleet host.')
   lines.push('# TYPE llama_dash_upstream_latency_seconds gauge')
-  lines.push(metricLine('llama_dash_upstream_latency_seconds', upstream.latencySeconds))
+  for (const host of upstream) {
+    lines.push(metricLine('llama_dash_upstream_latency_seconds', host.latencySeconds, { node: host.nodeId }))
+  }
 
-  lines.push('# HELP llama_dash_models_running Current count of running models reported by the inference backend.')
+  lines.push('# HELP llama_dash_models_running Current count of running models reported by each fleet host.')
   lines.push('# TYPE llama_dash_models_running gauge')
-  lines.push(metricLine('llama_dash_models_running', runningModels))
+  for (const host of upstream)
+    lines.push(metricLine('llama_dash_models_running', host.runningModels, { node: host.nodeId }))
 
   if (gpu.cpuUtilizationPercent != null) {
     lines.push('# HELP llama_dash_cpu_utilization_percent CPU utilization reported by the inference host.')
