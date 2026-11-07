@@ -2,6 +2,9 @@ import { config } from '../config.ts'
 import { inferenceBackend, type InferenceBackend } from './backend.ts'
 import { createLlamaSwapBackend } from './backends/llama-swap.ts'
 
+/** Fleet id of the primary host. Also the `model_events.node_id` default that pre-multi-node rows were backfilled with. */
+export const PRIMARY_NODE_ID = 'primary'
+
 export type FleetHost = {
   id: string
   label: string
@@ -51,14 +54,14 @@ const activityPaths = parseActivityPaths()
 
 export const fleet: FleetHost[] = [
   {
-    id: 'primary',
+    id: PRIMARY_NODE_ID,
     label: 'Primary',
     primary: true,
     backend: inferenceBackend,
     // The primary's activity store is the local llama-swap store, derived from
     // the config file path (config.yaml -> activity.sqlite in the same dir).
     activityStorePath:
-      activityPaths.get('primary') ?? config.inferenceConfigFile.replace(/config\.yaml$/, 'activity.sqlite'),
+      activityPaths.get(PRIMARY_NODE_ID) ?? config.inferenceConfigFile.replace(/config\.yaml$/, 'activity.sqlite'),
   },
   ...parseFleetHosts().map(({ id, url }) => ({
     id,

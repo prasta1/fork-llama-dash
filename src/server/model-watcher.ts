@@ -1,47 +1,57 @@
 import { desc } from 'drizzle-orm'
 import { ulid } from 'ulidx'
 import { db, schema } from './db/index.ts'
-import { inferenceBackend } from './inference/backend.ts'
+import { fleet, type FleetHost } from './inference/fleet.ts'
 import { publishAdminEvent } from './admin/events.ts'
 
 const POLL_INTERVAL_MS = 15_000
 
-let knownRunning = new Set<string>()
+// Keyed by node id: two hosts running the same model name must not cancel each other's load/unload events.
+const knownRunning = new Map<string, Set<string>>()
 let started = false
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 function seedFromDb() {
   const rows = db
-    .select({ modelId: schema.modelEvents.modelId, event: schema.modelEvents.event })
+    .select({
+      nodeId: schema.modelEvents.nodeId,
+      modelId: schema.modelEvents.modelId,
+      event: schema.modelEvents.event,
+    })
     .from(schema.modelEvents)
     .orderBy(desc(schema.modelEvents.timestamp))
     .all()
   const seen = new Set<string>()
   for (const r of rows) {
-    if (seen.has(r.modelId)) continue
-    seen.add(r.modelId)
-    if (r.event === 'load') knownRunning.add(r.modelId)
+    const key = `${r.nodeId}\u0000${r.modelId}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (r.event !== 'load') continue
+    const known = knownRunning.get(r.nodeId) ?? new Set<string>()
+    known.add(r.modelId)
+    knownRunning.set(r.nodeId, known)
   }
 }
 
-async function diffRunning() {
-  if (!inferenceBackend.listRunning) return
+async function diffNode(host: FleetHost) {
+  if (!host.backend.listRunning) return
 
   try {
-    const running = await inferenceBackend.listRunning()
+    const running = await host.backend.listRunning()
     const current = new Set(running.map((r) => r.model))
+    const known = knownRunning.get(host.id) ?? new Set<string>()
 
     const now = new Date()
     const inserts: Array<typeof schema.modelEvents.$inferInsert> = []
 
     for (const id of current) {
-      if (!knownRunning.has(id)) {
-        inserts.push({ id: `mev_${ulid()}`, modelId: id, event: 'load', timestamp: now })
+      if (!known.has(id)) {
+        inserts.push({ id: `mev_${ulid()}`, nodeId: host.id, modelId: id, event: 'load', timestamp: now })
       }
     }
-    for (const id of knownRunning) {
+    for (const id of known) {
       if (!current.has(id)) {
-        inserts.push({ id: `mev_${ulid()}`, modelId: id, event: 'unload', timestamp: now })
+        inserts.push({ id: `mev_${ulid()}`, nodeId: host.id, modelId: id, event: 'unload', timestamp: now })
       }
     }
 
@@ -49,13 +59,19 @@ async function diffRunning() {
       for (const row of inserts) {
         db.insert(schema.modelEvents).values(row).run()
       }
-      publishAdminEvent('model.changed', { events: inserts.map((row) => ({ modelId: row.modelId, event: row.event })) })
+      publishAdminEvent('model.changed', {
+        events: inserts.map((row) => ({ nodeId: row.nodeId, modelId: row.modelId, event: row.event })),
+      })
     }
 
-    knownRunning = current
+    knownRunning.set(host.id, current)
   } catch {
-    // upstream unreachable — keep last known state
+    // host unreachable — keep its last known state; other hosts are unaffected
   }
+}
+
+function diffRunning() {
+  return Promise.all(fleet.map(diffNode))
 }
 
 export function startModelWatcher() {

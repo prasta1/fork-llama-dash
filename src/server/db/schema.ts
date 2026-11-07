@@ -80,6 +80,8 @@ export const modelEvents = sqliteTable(
   {
     id: text('id').primaryKey(),
     modelId: text('model_id').notNull(),
+    // Fleet host the event happened on. Literal 'primary' = PRIMARY_NODE_ID (fleet.ts); existing rows backfill to it.
+    nodeId: text('node_id').notNull().default('primary'),
     event: text('event', { enum: ['load', 'unload'] }).notNull(),
     timestamp: integer('timestamp', { mode: 'timestamp_ms' }).notNull(),
   },

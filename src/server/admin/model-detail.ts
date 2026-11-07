@@ -3,6 +3,7 @@ import type { ApiModel, ApiModelKeyBreakdown, ApiModelStats } from '../../lib/sc
 import type { ApiRequest } from '../../lib/schemas/request'
 import { db, schema } from '../db/index.ts'
 import { inferenceBackend } from '../inference/backend.ts'
+import { PRIMARY_NODE_ID } from '../inference/fleet.ts'
 import type { BackendModel, BackendRunningModel } from '../inference/backend.ts'
 
 function modelMatch(modelId: string) {
@@ -15,7 +16,13 @@ export function getModelEvents(modelId: string, windowMs = 86_400_000) {
   return db
     .select()
     .from(schema.modelEvents)
-    .where(and(eq(schema.modelEvents.modelId, modelId), gte(schema.modelEvents.timestamp, since)))
+    .where(
+      and(
+        eq(schema.modelEvents.modelId, modelId),
+        eq(schema.modelEvents.nodeId, PRIMARY_NODE_ID),
+        gte(schema.modelEvents.timestamp, since),
+      ),
+    )
     .orderBy(desc(schema.modelEvents.timestamp))
     .all()
     .map((e) => ({

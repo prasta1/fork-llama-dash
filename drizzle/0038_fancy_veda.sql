@@ -1,0 +1,1 @@
+ALTER TABLE `model_events` ADD `node_id` text DEFAULT 'primary' NOT NULL;

@@ -1,5 +1,6 @@
-import { gte } from 'drizzle-orm'
+import { and, eq, gte } from 'drizzle-orm'
 import { db, schema, sqliteDb } from '../db/index.ts'
+import { PRIMARY_NODE_ID } from '../inference/fleet.ts'
 
 export function getModelTimeline(windowMs = 30 * 60_000) {
   const since = new Date(Date.now() - windowMs)
@@ -7,7 +8,7 @@ export function getModelTimeline(windowMs = 30 * 60_000) {
   const inWindow = db
     .select()
     .from(schema.modelEvents)
-    .where(gte(schema.modelEvents.timestamp, since))
+    .where(and(eq(schema.modelEvents.nodeId, PRIMARY_NODE_ID), gte(schema.modelEvents.timestamp, since)))
     .orderBy(schema.modelEvents.timestamp)
     .all()
 
@@ -22,12 +23,12 @@ export function getModelTimeline(windowMs = 30 * 60_000) {
       inner join (
         select model_id, max(timestamp) as timestamp
         from model_events
-        where timestamp < ?
+        where timestamp < ? and node_id = ?
         group by model_id
       ) latest on latest.model_id = me.model_id and latest.timestamp = me.timestamp
       where me.event = 'load'`,
     )
-    .all(since.getTime()) as Array<{ id: string; modelId: string; event: 'load'; timestamp: number }>
+    .all(since.getTime(), PRIMARY_NODE_ID) as Array<{ id: string; modelId: string; event: 'load'; timestamp: number }>
 
   const stillLoaded = olderLoads
     .filter((e) => !modelsInWindow.has(e.modelId))
