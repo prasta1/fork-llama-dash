@@ -1,5 +1,4 @@
 import { getGpuSnapshot } from '../../gpu-poller.ts'
-import { inferenceBackend } from '../../inference/backend.ts'
 import { fleet, PRIMARY_NODE_ID } from '../../inference/fleet.ts'
 import { getOwningNodeId } from '../../inference/model-index.ts'
 import {
@@ -157,9 +156,12 @@ export const modelRoutes: Route[] = [
     method: 'GET',
     pattern: /^\/api\/log-events$/,
     handler: async (request) => {
-      if (!inferenceBackend.eventStreamUrl) return error(501, 'Inference backend does not support event streaming')
+      // ?node= picks which fleet host's logs to stream; the primary by default.
+      const host = targetHost(request)
+      if (!host) return error(404, 'Unknown node')
+      if (!host.backend.eventStreamUrl) return error(501, 'Inference backend does not support event streaming')
 
-      const upstream = await fetch(inferenceBackend.eventStreamUrl).catch(() => null)
+      const upstream = await fetch(host.backend.eventStreamUrl).catch(() => null)
       if (!upstream?.ok || !upstream.body) return error(502, 'Failed to connect to inference backend event stream')
 
       const upstreamReader = upstream.body.getReader()

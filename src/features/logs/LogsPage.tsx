@@ -5,7 +5,7 @@ import { PageHeader } from '../../components/PageHeader'
 import { StatusDot } from '../../components/StatusDot'
 import { Tooltip } from '../../components/Tooltip'
 import { cn } from '../../lib/cn'
-import { useSystemStatus } from '../../lib/queries'
+import { useNodes, useSystemStatus } from '../../lib/queries'
 import { useLlamaSwapLogs } from '../../lib/use-llama-swap-logs'
 import { HighlightedText } from './HighlightedText'
 import { LEVEL_CLASS, SOURCE_LABEL, formatLogTime, parseLogLevel } from './logsUtils'
@@ -57,7 +57,9 @@ export function LogsPage() {
 }
 
 function LlamaSwapLogsPage() {
-  const { lines, connected, clear } = useLlamaSwapLogs()
+  const [node, setNode] = useState<string | undefined>(undefined)
+  const { lines, connected, clear } = useLlamaSwapLogs(node)
+  const nodes = useNodes().data?.nodes ?? []
   const [filter, setFilter] = useState<SourceFilter>('all')
   const [autoScroll, setAutoScroll] = useState(true)
   const [wrap, setWrap] = useState(true)
@@ -158,6 +160,20 @@ function LlamaSwapLogsPage() {
           variant="integrated"
           action={
             <div className="flex items-center gap-2">
+              {nodes.length > 1 ? (
+                <select
+                  aria-label="Node"
+                  className="select-native h-7 cursor-pointer rounded border border-border-strong bg-surface-2 px-2 font-mono text-[11px] text-fg outline-none focus:border-accent"
+                  value={node ?? nodes.find((n) => n.primary)?.id}
+                  onChange={(e) => setNode(e.target.value)}
+                >
+                  {nodes.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.label}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
               <span
                 className="inline-flex items-center gap-1.5 font-mono text-[11px] text-ok"
                 title={connected ? 'Connected' : 'Disconnected'}

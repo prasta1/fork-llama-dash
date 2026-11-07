@@ -10,7 +10,8 @@ export type LogLine = {
 const MAX_LINES = 10_000
 let nextId = 0
 
-export function useLlamaSwapLogs() {
+/** Streams one fleet host's logs. `node` undefined = the primary; changing it reconnects and clears the buffer. */
+export function useLlamaSwapLogs(node?: string) {
   const [lines, setLines] = useState<LogLine[]>([])
   const [connected, setConnected] = useState(false)
 
@@ -19,7 +20,9 @@ export function useLlamaSwapLogs() {
   }, [])
 
   useEffect(() => {
-    const es = new EventSource('/api/log-events')
+    // Lines from the previous host must not mix with the new one's.
+    setLines([])
+    const es = new EventSource(node ? `/api/log-events?node=${encodeURIComponent(node)}` : '/api/log-events')
 
     es.onopen = () => setConnected(true)
     es.onerror = () => setConnected(false)
@@ -54,7 +57,7 @@ export function useLlamaSwapLogs() {
       es.close()
       setConnected(false)
     }
-  }, [])
+  }, [node])
 
   return { lines, connected, clear }
 }
