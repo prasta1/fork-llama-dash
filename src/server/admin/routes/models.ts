@@ -78,11 +78,17 @@ export const modelRoutes: Route[] = [
     pattern: /^\/api\/models\/([^/]+)\/unload$/,
     handler: async (request, match) => {
       const id = decodeURIComponent(match[1])
-      const host = targetHost(request, id)
-      if (!host) return error(404, 'Unknown node')
-      if (!host.backend.unloadModel) return error(501, 'Inference backend does not support model unloading')
-      await host.backend.unloadModel(id)
-      publishAdminEvent('model.changed', { modelId: id, nodeId: host.id, action: 'unload' })
+      const requested = new URL(request.url).searchParams.get('node')
+      // No ?node=: unload wherever the model is actually running, so Unload on a running row always un-runs it.
+      const entry = requested ? undefined : (await listFleetModels()).find((e) => e.model.id === id)
+      const running = fleet.filter((h) => entry?.runningNodes.includes(h.id))
+      const hosts = requested || running.length === 0 ? [targetHost(request, id)] : running
+      if (hosts.some((h) => !h)) return error(404, 'Unknown node')
+      for (const host of hosts) {
+        if (!host?.backend.unloadModel) return error(501, 'Inference backend does not support model unloading')
+        await host.backend.unloadModel(id)
+        publishAdminEvent('model.changed', { modelId: id, nodeId: host.id, action: 'unload' })
+      }
       return json(200, { ok: true })
     },
   },
