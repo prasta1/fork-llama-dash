@@ -138,6 +138,7 @@ export function createLlamaSwapBackend(baseUrl: string): InferenceBackend {
       const models = await client.listModels()
       return models.data.map(mapLlamaSwapModel)
     },
+    listModelsRaw: () => client.listModelsRaw(),
     async listRunning() {
       const { running } = await client.listRunning()
       return running.map(mapLlamaSwapRunningModel)

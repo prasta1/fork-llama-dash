@@ -18,6 +18,7 @@ import { applyTransforms, routingOutcomeFromDecision } from './transforms.ts'
 import { applyCredentialInjection, auditToJson } from './credential-placeholders.ts'
 import { applyContextCompression } from './context-compression.ts'
 import { config } from '../config.ts'
+import { mergedModelsResponse } from './models-list.ts'
 
 const HARD_BODY_CAP = 20 * 1024 * 1024
 
@@ -83,6 +84,13 @@ export async function handleProxyRequest(request: Request): Promise<Response> {
   }
 
   setAuthContext(ctx, authResult)
+
+  // Fleet-wide catalog. Not logged: there is no single upstream to attribute it to. A direct (cloud) rule still wins.
+  if (ctx.method === 'GET' && ctx.endpoint === '/v1/models' && routingDecision.target.type !== 'direct') {
+    const merged = await mergedModelsResponse()
+    if (merged) return merged
+  }
+
   try {
     await ensureProxyBody(ctx)
   } catch (err) {

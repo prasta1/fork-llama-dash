@@ -66,6 +66,8 @@ export type InferenceBackend = {
   defaultProxyUpstream(pathname: string, search: string): string
   eventStreamUrl?: string
   listModels(): Promise<Array<BackendModel>>
+  /** The upstream's own /v1/models entries, unmodified, for merging catalogs across the fleet. */
+  listModelsRaw?(): Promise<Array<{ id: string } & Record<string, unknown>>>
   listRunning?(): Promise<Array<BackendRunningModel>>
   hardware?(): Promise<InferenceHardware>
   modelLogNames?(modelId: string): Array<string>

@@ -10,6 +10,8 @@ import {
 
 export type { InferenceHardware, OpenAiModel, RunningModel }
 
+const RawModelsListSchema = v.object({ data: v.array(v.looseObject({ id: v.string() })) })
+
 const stripTrailingSlash = (s: string) => s.replace(/\/+$/, '')
 
 export function createLlamaSwapClient(baseUrl: string) {
@@ -40,6 +42,9 @@ export function createLlamaSwapClient(baseUrl: string) {
   return {
     baseUrl: base,
     listModels: () => callJson('/v1/models', ModelsListResponseSchema),
+    // Raw entries (unknown fields kept) for the merged /v1/models; the timeout keeps a hung host from stalling the list.
+    listModelsRaw: async () =>
+      (await callJson('/v1/models', RawModelsListSchema, { signal: AbortSignal.timeout(5000) })).data,
     listRunning: () => callJson('/running', RunningResponseSchema),
     unloadModel: (id: string) => callText(`/api/models/unload/${encodeURIComponent(id)}`, { method: 'POST' }),
     loadModel: (id: string) => callText(`/upstream/${encodeURIComponent(id)}/`),
