@@ -89,6 +89,11 @@ export const systemRoutes: Route[] = [
   },
   {
     method: 'GET',
+    pattern: /^\/api\/nodes$/,
+    handler: async () => json(200, { nodes: fleet.map(({ id, label, primary }) => ({ id, label, primary })) }),
+  },
+  {
+    method: 'GET',
     pattern: /^\/api\/fleet$/,
     handler: async (request) => {
       const url = new URL(request.url)

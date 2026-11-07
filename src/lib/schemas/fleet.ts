@@ -71,5 +71,12 @@ export const FleetResponseSchema = v.object({
   hosts: v.array(FleetHostSchema),
 })
 
+/** Just the fleet's membership (no health/models/activity), cheap enough for every page to ask. */
+export const NodesResponseSchema = v.object({
+  nodes: v.array(v.object({ id: v.string(), label: v.string(), primary: v.boolean() })),
+})
+
+export type ApiNode = v.InferOutput<typeof NodesResponseSchema>['nodes'][number]
+export type ApiNodesResponse = v.InferOutput<typeof NodesResponseSchema>
 export type ApiFleetHost = v.InferOutput<typeof FleetHostSchema>
 export type ApiFleetResponse = v.InferOutput<typeof FleetResponseSchema>
