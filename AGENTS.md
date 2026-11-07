@@ -90,7 +90,9 @@ src/
     config.ts             — env-var loader (INFERENCE_BASE_URL, DATABASE_PATH, …)
     cpu-poller.ts         — samples inference-host CPU counters from procfs
     gpu-poller.ts         — polls nvidia-smi/rocm-smi/system_profiler and combines hardware telemetry
-    model-watcher.ts      — polls /running every 15s, writes load/unload events
+    model-watcher.ts      — polls every fleet host every 15s (per-node state), writes load/unload events, refreshes the model index
+    inference/fleet.ts    — the fleet: primary + FLEET_HOSTS secondaries; PRIMARY_NODE_ID
+    inference/model-index.ts — which host serves which model (per node, priority = fleet order)
     db/                   — drizzle schema + SQLite init; migrations are applied explicitly with pnpm db:migrate
     proxy/                — /v1/* pass-through: context, handler, auth, body snapshots, transforms, forwarding, usage, queued logging, rate limits
     admin/                — /api/* admin surface: dispatcher plus grouped routes/, requests, model-events, model-detail, key-detail, api-keys, aliases, settings, events
@@ -177,6 +179,7 @@ paths (proxy will grow middleware; admin will grow CRUD).
    - `/api/requests/histogram` — bucketed req/s histogram
    - `/api/requests/:id` — detail with adjacent navigation
    - `/api/health` — upstream reachability, version, latency
+   - `/api/nodes` — fleet membership (id, label, primary); pages show node UI only when there are 2+
     - `/api/model-timeline` — load/unload events for timeline viz
     - `/api/events` — lightweight llama-dash dashboard invalidation/data events
     - `/api/log-events` — llama-swap log SSE stream used only by the Logs page
@@ -293,6 +296,19 @@ paths (proxy will grow middleware; admin will grow CRUD).
 15. Feature-local UI structure under `src/features/*`. Route files are thin
     entrypoints; page-specific components live with their feature instead of
     accumulating inside `src/routes/*` or flat shared component files.
+16. Multi-node fleet. The primary (`INFERENCE_BASE_URL`) plus `FLEET_HOSTS` secondaries
+    form `inference/fleet.ts`. Secondaries are observed only unless `FLEET_ROUTING=true`,
+    which makes `proxy/upstream.ts` send a request to the host that owns the (post-alias)
+    model per `inference/model-index.ts` (primary wins ties, unknown model → primary,
+    a `direct` routing target still wins) and makes `proxy/models-list.ts` merge
+    `GET /v1/models` (`owned_by` = the host dispatch will pick). `model_events.node_id`
+    and `requests.node_id` record where things happened (null = pre-multi-node or a direct
+    cloud target). `/api/models` is fleet-wide (`nodes`, `runningNodes`); load/unload default
+    to the owning node and accept `?node=`, unload-all and `/api/log-events` default to the
+    primary and accept `?node=`. `/metrics` series carry a `node` label. The UI shows node
+    badges/columns/panels only for 2+ hosts, colored with the `--series-*` ramp (never status
+    colors). The config editor stays primary-only. Status of the original design:
+    `docs/2026_10_24_multi_node_status.md`.
 
 ## Tooling
 
@@ -460,6 +476,8 @@ sort lexicographically by creation time).
   `headersTimeout` and get mislabeled `upstream_unreachable`. Tune via
   `UPSTREAM_HEADERS_TIMEOUT_MS` (default 600000) and `UPSTREAM_BODY_TIMEOUT_MS`
   (default 0); `0` disables.
+- To try the multi-node UI with one machine, register the primary's own URL as a second host
+  (`FLEET_HOSTS=dup=<same url>`) against a *copy* of the DB — every model then appears on both nodes.
 - Env vars consumed by the server live in `src/server/config.ts`. Add new
   ones there, not ad-hoc across the codebase.
 
