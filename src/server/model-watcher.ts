@@ -2,6 +2,7 @@ import { desc } from 'drizzle-orm'
 import { ulid } from 'ulidx'
 import { db, schema } from './db/index.ts'
 import { fleet, type FleetHost } from './inference/fleet.ts'
+import { setNodeModels } from './inference/model-index.ts'
 import { publishAdminEvent } from './admin/events.ts'
 
 const POLL_INTERVAL_MS = 15_000
@@ -30,6 +31,20 @@ function seedFromDb() {
     const known = knownRunning.get(r.nodeId) ?? new Set<string>()
     known.add(r.modelId)
     knownRunning.set(r.nodeId, known)
+  }
+}
+
+/** Refresh which models this host can serve. Separate from diffNode so one failing call doesn't block the other. */
+async function refreshModelIndex(host: FleetHost, priority: number) {
+  try {
+    const models = await host.backend.listModels()
+    setNodeModels(
+      host.id,
+      priority,
+      models.map((m) => m.id),
+    )
+  } catch {
+    // host unreachable — its previous models stay in the index
   }
 }
 
@@ -71,7 +86,7 @@ async function diffNode(host: FleetHost) {
 }
 
 function diffRunning() {
-  return Promise.all(fleet.map(diffNode))
+  return Promise.all(fleet.flatMap((host, priority) => [diffNode(host), refreshModelIndex(host, priority)]))
 }
 
 export function startModelWatcher() {
