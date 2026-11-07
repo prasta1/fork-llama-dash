@@ -3,7 +3,7 @@ import type { ApiModel, ApiModelKeyBreakdown, ApiModelStats } from '../../lib/sc
 import type { ApiRequest } from '../../lib/schemas/request'
 import { db, schema } from '../db/index.ts'
 import { inferenceBackend } from '../inference/backend.ts'
-import { PRIMARY_NODE_ID } from '../inference/fleet.ts'
+import { fleet, PRIMARY_NODE_ID } from '../inference/fleet.ts'
 import type { BackendModel, BackendRunningModel } from '../inference/backend.ts'
 
 function modelMatch(modelId: string) {
@@ -190,11 +190,59 @@ export function extractModelConfig(modelId: string): string | null {
   return inferenceBackend.modelConfigSnippet?.(modelId) ?? null
 }
 
+export type FleetModel = {
+  model: BackendModel
+  /** Running info from the highest-priority host that has the model loaded. */
+  running: BackendRunningModel | undefined
+  nodes: Array<string>
+  runningNodes: Array<string>
+}
+
+/**
+ * Every fleet host's catalog merged by model id, in fleet (priority) order, so the first owner's entry
+ * describes the model. A host that fails to answer contributes nothing; if none answer, the error is
+ * rethrown so a single-host setup surfaces an unreachable backend exactly as before.
+ */
+export async function listFleetModels(): Promise<Array<FleetModel>> {
+  const perHost = await Promise.all(
+    fleet.map(async (host) => {
+      try {
+        const [models, running] = await Promise.all([
+          host.backend.listModels(),
+          host.backend.listRunning?.() ?? Promise.resolve([]),
+        ])
+        return { ok: true as const, id: host.id, models, runningById: new Map(running.map((r) => [r.model, r])) }
+      } catch (error) {
+        return { ok: false as const, error }
+      }
+    }),
+  )
+  const answered = perHost.flatMap((h) => (h.ok ? [h] : []))
+  if (answered.length === 0) throw (perHost[0] as { error: unknown }).error
+
+  const merged = new Map<string, FleetModel>()
+  for (const host of answered) {
+    for (const model of host.models) {
+      const runInfo = host.runningById.get(model.id)
+      const entry = merged.get(model.id) ?? { model, running: undefined, nodes: [], runningNodes: [] }
+      entry.nodes.push(host.id)
+      if (runInfo || model.running) {
+        entry.runningNodes.push(host.id)
+        entry.running ??= runInfo
+      }
+      merged.set(model.id, entry)
+    }
+  }
+  return [...merged.values()]
+}
+
 export function buildApiModel(
   model: BackendModel,
   running: BackendRunningModel | undefined,
   configContextLengths: Map<string, number>,
+  placement: { nodes: Array<string>; runningNodes: Array<string> },
 ): ApiModel {
+  const isRunning = placement.runningNodes.length > 0
   return {
     id: model.id,
     name: model.name,
@@ -204,10 +252,12 @@ export function buildApiModel(
     contextLength:
       model.contextLength ??
       (model.kind === 'local' ? (running?.contextLength ?? configContextLengths.get(model.id) ?? null) : null),
-    state: running?.state ?? (model.running ? 'ready' : 'stopped'),
-    running: Boolean(running) || model.running,
+    state: running?.state ?? (isRunning ? 'ready' : 'stopped'),
+    running: isRunning,
     ttl: running?.ttl ?? null,
     capabilities: model.capabilities,
+    nodes: placement.nodes,
+    runningNodes: placement.runningNodes,
   }
 }
 

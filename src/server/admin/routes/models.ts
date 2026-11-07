@@ -1,5 +1,7 @@
 import { getGpuSnapshot } from '../../gpu-poller.ts'
 import { inferenceBackend } from '../../inference/backend.ts'
+import { fleet, PRIMARY_NODE_ID } from '../../inference/fleet.ts'
+import { getOwningNodeId } from '../../inference/model-index.ts'
 import {
   buildApiModel,
   extractModelConfig,
@@ -8,23 +10,31 @@ import {
   getModelKeyBreakdown,
   getModelRequestStats,
   getModelRequests,
+  listFleetModels,
 } from '../model-detail.ts'
 import { getModelTimeline } from '../model-events.ts'
 import { formatSseEvent, publishAdminEvent, subscribeAdminEvents } from '../events.ts'
 import { clamp, error, json, type Route } from './types.ts'
+
+/**
+ * The host a load/unload applies to: `?node=` if given, else the host that owns the model, else the primary.
+ * Returns null for an unknown `?node=` so the caller can 404 instead of silently acting on another host.
+ */
+function targetHost(request: Request, modelId?: string) {
+  const requested = new URL(request.url).searchParams.get('node')
+  if (requested) return fleet.find((h) => h.id === requested) ?? null
+  const owner = modelId ? getOwningNodeId(modelId) : null
+  return fleet.find((h) => h.id === owner) ?? fleet.find((h) => h.id === PRIMARY_NODE_ID) ?? null
+}
 
 export const modelRoutes: Route[] = [
   {
     method: 'GET',
     pattern: /^\/api\/models$/,
     handler: async () => {
-      const [models, running] = await Promise.all([
-        inferenceBackend.listModels(),
-        inferenceBackend.listRunning?.() ?? Promise.resolve([]),
-      ])
-      const runningById = new Map(running.map((r) => [r.model, r]))
+      const entries = await listFleetModels()
       const configContextLengths = getConfigContextLengths()
-      const rows = models.map((m) => buildApiModel(m, runningById.get(m.id), configContextLengths))
+      const rows = entries.map((e) => buildApiModel(e.model, e.running, configContextLengths, e))
       return json(200, { models: rows })
     },
   },
@@ -33,16 +43,10 @@ export const modelRoutes: Route[] = [
     pattern: /^\/api\/models\/([^/]+)$/,
     handler: async (_request, match) => {
       const id = decodeURIComponent(match[1])
-      const [modelsRes, runningRes] = await Promise.all([
-        inferenceBackend.listModels(),
-        inferenceBackend.listRunning?.() ?? Promise.resolve([]),
-      ])
+      const entry = (await listFleetModels()).find((e) => e.model.id === id)
+      if (!entry) return error(404, `Model ${id} not found`)
       const configContextLengths = getConfigContextLengths()
-      const modelData = modelsRes.find((m) => m.id === id)
-      if (!modelData) return error(404, `Model ${id} not found`)
-
-      const runInfo = runningRes.find((r) => r.model === id)
-      const model = buildApiModel(modelData, runInfo, configContextLengths)
+      const model = buildApiModel(entry.model, entry.running, configContextLengths, entry)
 
       const [events, stats, requests, keyBreakdown] = await Promise.all([
         getModelEvents(id),
@@ -50,7 +54,8 @@ export const modelRoutes: Route[] = [
         getModelRequests(id, 20),
         getModelKeyBreakdown(id),
       ])
-      const configSnippet = extractModelConfig(id)
+      // The config file is local to the primary; a model only served elsewhere has no snippet here.
+      const configSnippet = entry.nodes.includes(PRIMARY_NODE_ID) ? extractModelConfig(id) : null
 
       return json(200, { model, events, stats, requests, configSnippet, keyBreakdown })
     },
@@ -58,32 +63,39 @@ export const modelRoutes: Route[] = [
   {
     method: 'POST',
     pattern: /^\/api\/models\/([^/]+)\/load$/,
-    handler: async (_request, match) => {
-      if (!inferenceBackend.loadModel) return error(501, 'Inference backend does not support model loading')
+    handler: async (request, match) => {
       const id = decodeURIComponent(match[1])
-      await inferenceBackend.loadModel(id)
-      publishAdminEvent('model.changed', { modelId: id, action: 'load' })
+      const host = targetHost(request, id)
+      if (!host) return error(404, 'Unknown node')
+      if (!host.backend.loadModel) return error(501, 'Inference backend does not support model loading')
+      await host.backend.loadModel(id)
+      publishAdminEvent('model.changed', { modelId: id, nodeId: host.id, action: 'load' })
       return json(200, { ok: true })
     },
   },
   {
     method: 'POST',
     pattern: /^\/api\/models\/([^/]+)\/unload$/,
-    handler: async (_request, match) => {
-      if (!inferenceBackend.unloadModel) return error(501, 'Inference backend does not support model unloading')
+    handler: async (request, match) => {
       const id = decodeURIComponent(match[1])
-      await inferenceBackend.unloadModel(id)
-      publishAdminEvent('model.changed', { modelId: id, action: 'unload' })
+      const host = targetHost(request, id)
+      if (!host) return error(404, 'Unknown node')
+      if (!host.backend.unloadModel) return error(501, 'Inference backend does not support model unloading')
+      await host.backend.unloadModel(id)
+      publishAdminEvent('model.changed', { modelId: id, nodeId: host.id, action: 'unload' })
       return json(200, { ok: true })
     },
   },
   {
     method: 'POST',
     pattern: /^\/api\/models\/unload$/,
-    handler: async () => {
-      if (!inferenceBackend.unloadAll) return error(501, 'Inference backend does not support unloading all models')
-      await inferenceBackend.unloadAll()
-      publishAdminEvent('model.changed', { action: 'unload_all' })
+    handler: async (request) => {
+      // No model to look up an owner for, so this stays on the primary unless `?node=` says otherwise.
+      const host = targetHost(request)
+      if (!host) return error(404, 'Unknown node')
+      if (!host.backend.unloadAll) return error(501, 'Inference backend does not support unloading all models')
+      await host.backend.unloadAll()
+      publishAdminEvent('model.changed', { nodeId: host.id, action: 'unload_all' })
       return json(200, { ok: true })
     },
   },

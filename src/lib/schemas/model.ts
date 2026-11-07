@@ -29,6 +29,9 @@ export const ApiModelSchema = v.object({
   running: v.boolean(),
   ttl: v.nullable(v.number()),
   capabilities: ApiModelCapabilitiesSchema,
+  // Fleet hosts that can serve this model (priority order) and the ones that have it loaded right now.
+  nodes: v.array(v.string()),
+  runningNodes: v.array(v.string()),
 })
 
 export type ApiModel = v.InferOutput<typeof ApiModelSchema>
