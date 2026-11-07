@@ -1,8 +1,10 @@
 import { useNavigate } from '@tanstack/react-router'
+import { NodeBadge } from '../../components/NodeBadge'
 import { StatusDot, stateTone } from '../../components/StatusDot'
 import type { ApiModel } from '../../lib/api'
 import { clickableRowFocusClass, clickableRowProps } from '../../lib/clickable-row-props'
 import { cn } from '../../lib/cn'
+import { useNodeBadges } from '../../lib/use-node-badges'
 
 type Props = {
   model: ApiModel
@@ -10,6 +12,7 @@ type Props = {
 
 export function SelectorRow({ model }: Props) {
   const navigate = useNavigate()
+  const nodeBadges = useNodeBadges()(model)
   const selector = model.selector
   const tone = stateTone(model.state, model.running)
 
@@ -24,9 +27,14 @@ export function SelectorRow({ model }: Props) {
         <StatusDot tone={tone} live={model.running} />
       </td>
       <td>
-        <span className="mono" translate="no">
-          {model.id}
-        </span>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="mono" translate="no">
+            {model.id}
+          </span>
+          {nodeBadges.map((b) => (
+            <NodeBadge key={b.id} label={b.label} step={b.step} active={b.active} />
+          ))}
+        </div>
       </td>
       <td>
         <span className="mono text-[11px] text-fg-dim">{selector.strategy}</span>

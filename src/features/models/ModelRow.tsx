@@ -1,11 +1,13 @@
 import { useNavigate } from '@tanstack/react-router'
 import { Play, Power } from 'lucide-react'
 import { CopyButton } from '../../components/CopyButton'
+import { NodeBadge } from '../../components/NodeBadge'
 import { StatusDot, stateTone } from '../../components/StatusDot'
 import { Tooltip } from '../../components/Tooltip'
 import type { ApiModel } from '../../lib/api'
 import { clickableRowFocusClass, clickableRowProps } from '../../lib/clickable-row-props'
 import { cn } from '../../lib/cn'
+import { useNodeBadges } from '../../lib/use-node-badges'
 import { formatCapabilityLabel, getModelCapabilityBadges } from './modelUtils'
 
 type Props = {
@@ -18,6 +20,7 @@ type Props = {
 
 export function ModelRow({ model, loading, unloading, onLoad, onUnload }: Props) {
   const navigate = useNavigate()
+  const nodeBadges = useNodeBadges()(model)
   const tone = loading
     ? ('warn' as const)
     : unloading
@@ -45,6 +48,9 @@ export function ModelRow({ model, loading, unloading, onLoad, onUnload }: Props)
               <CopyButton text={model.id} variant="icon" ariaLabel={`Copy model slug ${model.id}`} stopPropagation />
             </span>
           </Tooltip>
+          {nodeBadges.map((b) => (
+            <NodeBadge key={b.id} label={b.label} step={b.step} active={b.active} />
+          ))}
           {capabilityBadges.length > 0 ? (
             <span className="contents">
               <span className="sr-only">Capabilities: </span>
