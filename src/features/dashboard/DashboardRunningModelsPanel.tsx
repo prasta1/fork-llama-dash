@@ -1,9 +1,11 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
+import { NodeBadge } from '../../components/NodeBadge'
 import { StatusDot, stateTone } from '../../components/StatusDot'
 import type { ApiModel } from '../../lib/api'
 import { clickableRowFocusClass, clickableRowProps } from '../../lib/clickable-row-props'
 import { cn } from '../../lib/cn'
+import { useNodeBadges } from '../../lib/use-node-badges'
 
 type Props = {
   active: Array<ApiModel>
@@ -12,6 +14,7 @@ type Props = {
 
 export function DashboardRunningModelsPanel({ active, total }: Props) {
   const navigate = useNavigate()
+  const nodeBadgesFor = useNodeBadges()
   const runningCount = active.filter((m) => m.running && m.kind !== 'peer').length
   const peerCount = active.filter((m) => m.kind === 'peer').length
   const subtitle =
@@ -86,7 +89,14 @@ export function DashboardRunningModelsPanel({ active, total }: Props) {
                     <StatusDot tone={tone} live />
                   </td>
                   <td className="mono" translate="no">
-                    {m.id}
+                    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+                      {m.id}
+                      {nodeBadgesFor(m)
+                        .filter((b) => b.active)
+                        .map((b) => (
+                          <NodeBadge key={b.id} label={b.label} step={b.step} />
+                        ))}
+                    </span>
                   </td>
                   <td>{m.name}</td>
                   <td>
