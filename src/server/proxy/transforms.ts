@@ -133,7 +133,8 @@ export function routingOutcomeFromDecision(decision: RoutingDecision, requestedM
     actionType: decision.action?.type ?? null,
     authMode: decision.authMode,
     preserveAuthorization: decision.authMode === 'passthrough' && decision.preserveAuthorization,
-    targetType: decision.target.type,
+    targetType:
+      decision.target.type === 'direct' || decision.target.type === 'llama_swap' ? decision.target.type : null,
     targetBaseUrl: decision.target.type === 'direct' ? decision.target.baseUrl : null,
     targetCredentialId: decision.target.type === 'direct' ? (decision.target.credentialId ?? null) : null,
     requestedModel,

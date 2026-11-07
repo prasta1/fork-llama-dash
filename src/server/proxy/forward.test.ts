@@ -38,6 +38,7 @@ function input(overrides: Partial<ProxyLogInput> = {}): ProxyLogInput {
     reqBody: null,
     resHeaders: null,
     resBody: null,
+    nodeId: null,
     keyId: null,
     reqModel: 'gemma-4-26B-A4B-it',
     attribution: { clientName: null, endUserId: null, sessionId: null },
@@ -86,6 +87,7 @@ describe('writeProxyLog', () => {
 
     await forwardUpstreamAndLog({
       upstream: 'http://upstream.test/v1/chat/completions',
+      nodeId: null,
       method: 'POST',
       headers: { 'content-type': 'application/json', 'content-length': '2' },
       body: '{}',
@@ -119,6 +121,7 @@ describe('writeProxyLog', () => {
 
     const response = await forwardUpstreamAndLog({
       upstream: 'https://chatgpt.com/backend-api/codex/responses?include=reasoning.encrypted_content',
+      nodeId: null,
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: '{"stream":false}',
@@ -159,6 +162,7 @@ describe('writeProxyLog', () => {
 
     const response = await forwardUpstreamAndLog({
       upstream: 'https://chatgpt.com/backend-api/codex/responses',
+      nodeId: null,
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: '{"stream":true}',
@@ -208,6 +212,7 @@ describe('writeProxyLog', () => {
       undiciFetch.mockResolvedValue(new Response(body, { headers: { 'content-type': 'text/event-stream' } }))
       return forwardUpstreamAndLog({
         upstream: 'http://llama-swap:8080/v1/chat/completions',
+        nodeId: null,
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: '{"stream":true}',
@@ -270,6 +275,7 @@ describe('writeProxyLog', () => {
 
     const response = await forwardUpstreamAndLog({
       upstream: 'https://upstream.test/v1/responses',
+      nodeId: null,
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: '{}',

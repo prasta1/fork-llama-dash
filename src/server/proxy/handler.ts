@@ -57,6 +57,7 @@ export async function handleProxyRequest(request: Request): Promise<Response> {
       headers.set('retry-after', String(Math.ceil(authResult.retryAfterMs / 1000)))
     }
     writeProxyLog({
+      nodeId: ctx.nodeId,
       startedAt: ctx.startedAt,
       status: authResult.status,
       method: ctx.method,
@@ -99,6 +100,7 @@ export async function handleProxyRequest(request: Request): Promise<Response> {
       ctx.routingOutcome = transformResult.routing
       if (!transformResult.ok) {
         writeProxyLog({
+          nodeId: ctx.nodeId,
           startedAt: ctx.startedAt,
           status: transformResult.status,
           method: ctx.method,
@@ -147,6 +149,7 @@ export async function handleProxyRequest(request: Request): Promise<Response> {
       },
     }
     writeProxyLog({
+      nodeId: ctx.nodeId,
       startedAt: ctx.startedAt,
       status: 401,
       method: ctx.method,
@@ -176,6 +179,7 @@ export async function handleProxyRequest(request: Request): Promise<Response> {
   ctx.redactedInjectedHeaderNames = credentialInjection.redactedHeaderNames
   if (!credentialInjection.ok) {
     writeProxyLog({
+      nodeId: ctx.nodeId,
       startedAt: ctx.startedAt,
       status: credentialInjection.status,
       method: ctx.method,
@@ -206,6 +210,7 @@ export async function handleProxyRequest(request: Request): Promise<Response> {
   const reqBody = loggedRequestBody(ctx)
   const forwardedResponse = await forwardUpstreamAndLog({
     upstream: ctx.upstream,
+    nodeId: ctx.nodeId,
     method: ctx.method,
     headers: ctx.reqHeaders,
     body: forwardBody(ctx),
@@ -225,6 +230,7 @@ export async function handleProxyRequest(request: Request): Promise<Response> {
 
   if ('upstreamError' in forwardedResponse) {
     writeProxyLog({
+      nodeId: ctx.nodeId,
       startedAt: ctx.startedAt,
       status: 502,
       method: ctx.method,
@@ -262,6 +268,7 @@ function rejectBodyTooLarge(ctx: ProxyContext, err: unknown): Response {
   const message = err instanceof Error ? err.message : String(err)
   const body = { error: { message, type: 'request_too_large' } }
   writeProxyLog({
+    nodeId: ctx.nodeId,
     startedAt: ctx.startedAt,
     status: 413,
     method: ctx.method,

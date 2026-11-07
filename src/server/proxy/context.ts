@@ -40,6 +40,7 @@ export type ProxyContext = {
   redactedInjectedHeaderNames: Set<string>
   body: ProxyBodySnapshot | null
   keyId: string | null
+  nodeId: string | null
   keyRow: ApiKey | null
 }
 
@@ -63,6 +64,7 @@ export function createProxyContext(request: Request): ProxyContext {
     redactedInjectedHeaderNames: new Set(),
     body: null,
     keyId: null,
+    nodeId: null,
     keyRow: null,
   }
 }

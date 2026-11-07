@@ -56,6 +56,7 @@ describe('proxy privacy settings', () => {
 
     const response = await forwardUpstreamAndLog({
       upstream: 'http://upstream.test/v1/messages',
+      nodeId: null,
       method: 'POST',
       headers: {},
       body: undefined,

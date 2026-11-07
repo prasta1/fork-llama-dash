@@ -18,6 +18,7 @@ type Attribution = {
 }
 
 export type ProxyLogInput = {
+  nodeId: string | null
   startedAt: number
   status: number
   requestClass?: 'inference' | 'mcp_relay'
@@ -172,6 +173,7 @@ export async function forwardUpstreamAndLog(input: {
   hasBody: boolean
   startedAt: number
   endpoint: string
+  nodeId: string | null
   requestClass?: 'inference' | 'mcp_relay'
   reqModel: string | null
   reqHeadersJson: string
@@ -213,6 +215,7 @@ export async function forwardUpstreamAndLog(input: {
 
   if (!upstreamResponse.body) {
     writeProxyLog({
+      nodeId: input.nodeId,
       startedAt: input.startedAt,
       status: upstreamResponse.status,
       requestClass: input.requestClass,
@@ -278,6 +281,7 @@ export async function forwardUpstreamAndLog(input: {
 
           logged = true
           writeProxyLog({
+            nodeId: input.nodeId,
             startedAt: input.startedAt,
             status: upstreamResponse.status,
             requestClass: input.requestClass,
@@ -315,6 +319,7 @@ export async function forwardUpstreamAndLog(input: {
         const message = err instanceof Error ? err.message : String(err)
         logged = true
         writeProxyLog({
+          nodeId: input.nodeId,
           startedAt: input.startedAt,
           status: upstreamResponse.status,
           requestClass: input.requestClass,
@@ -342,6 +347,7 @@ export async function forwardUpstreamAndLog(input: {
       if (logged) return
       logged = true
       writeProxyLog({
+        nodeId: input.nodeId,
         startedAt: input.startedAt,
         status: upstreamResponse.status,
         requestClass: input.requestClass,

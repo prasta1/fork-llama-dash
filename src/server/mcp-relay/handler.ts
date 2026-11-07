@@ -154,6 +154,7 @@ export async function handleMcpRelayRequest(request: Request): Promise<Response>
     hasBody: body.hasBody,
     startedAt,
     endpoint,
+    nodeId: null,
     requestClass: 'mcp_relay',
     reqModel: null,
     reqHeadersJson,
@@ -302,6 +303,7 @@ function relayError(input: {
 }): Response {
   const body = { error: { message: input.message, type: input.type } }
   writeProxyLog({
+    nodeId: null,
     startedAt: input.startedAt,
     status: input.status,
     requestClass: 'mcp_relay',
@@ -338,6 +340,7 @@ function relayFailure(input: {
 }): Response {
   const body = { error: { message: input.message, type: input.type } }
   writeProxyLog({
+    nodeId: null,
     startedAt: input.startedAt,
     status: input.status,
     requestClass: 'mcp_relay',
