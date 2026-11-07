@@ -1,7 +1,10 @@
+import { NodeBadge } from '../../components/NodeBadge'
 import { PageHeader } from '../../components/PageHeader'
 import { StatusDot } from '../../components/StatusDot'
+import type { ApiSystemStatus } from '../../lib/api'
 import { cn } from '../../lib/cn'
 import { useSystemStatus } from '../../lib/queries'
+import { assignSeriesSteps } from '../../lib/series-color'
 import { InferenceHostPanel } from './InferenceHostPanel'
 
 type Tone = 'ok' | 'warn' | 'err' | 'idle'
@@ -83,6 +86,42 @@ function SystemPanel({
       <dl className="m-0 px-6 py-4 max-md:px-4">{children}</dl>
     </section>
   )
+}
+
+const NODE_CAPABILITIES = ['models', 'runningModels', 'lifecycle', 'logs', 'config', 'metrics'] as const
+
+/** One panel per fleet host: reachability, version, and what that host supports. Multi-host fleets only. */
+function FleetNodePanels({ nodes }: { nodes: ApiSystemStatus['nodes'] }) {
+  const steps = assignSeriesSteps(nodes.map((n) => n.id))
+  return nodes.map((node) => {
+    const supported = NODE_CAPABILITIES.filter((c) => node.capabilities[c])
+    const unsupported = NODE_CAPABILITIES.filter((c) => !node.capabilities[c])
+    return (
+      <SystemPanel
+        key={node.id}
+        title={`Node · ${node.label}`}
+        aside={node.health.reachable ? 'reachable' : 'unreachable'}
+      >
+        <MetaRow label="node" value={<NodeBadge label={node.label} step={steps.get(node.id) ?? 0} />} />
+        <MetaRow label="role" value={node.primary ? 'primary · receives proxy traffic' : 'secondary'} />
+        <MetaRow label="upstream" value={node.upstreamHost} />
+        <MetaRow
+          label="state"
+          value={
+            <span className="inline-flex items-center gap-2">
+              <StatusDot tone={node.health.reachable ? 'ok' : 'err'} />
+              {node.health.reachable
+                ? `reachable${node.health.latencyMs != null ? ` · ${node.health.latencyMs} ms` : ''}`
+                : (node.health.error ?? 'unreachable')}
+            </span>
+          }
+        />
+        {node.health.version ? <MetaRow label="version" value={node.health.version} /> : null}
+        <MetaRow label="supports" value={supported.join(' · ') || '—'} />
+        {unsupported.length > 0 ? <MetaRow label="not available" value={unsupported.join(' · ')} /> : null}
+      </SystemPanel>
+    )
+  })
 }
 
 function StatTile({ label, value, meta, tone }: { label: string; value: React.ReactNode; meta?: string; tone: Tone }) {
@@ -243,6 +282,8 @@ export function SystemPage() {
                 <MetaRow label="logs" value={data.inference.capabilities.logs ? 'supported' : 'unsupported'} />
                 <MetaRow label="config" value={data.inference.capabilities.config ? 'supported' : 'unsupported'} />
               </SystemPanel>
+
+              {data.nodes.length > 0 ? <FleetNodePanels nodes={data.nodes} /> : null}
 
               <div className="grid xl:grid-cols-2">
                 <SystemPanel title="Loading Queue" aside={data.logging.dropped > 0 ? 'dropping' : 'ready'}>
