@@ -6,12 +6,12 @@ type ModelEntry = { id: string } & Record<string, unknown>
 type ModelsListDeps = {
   enabled: boolean
   /** In priority order, primary first. */
-  hosts: ReadonlyArray<{ listModelsRaw?: () => Promise<Array<ModelEntry>> }>
+  hosts: ReadonlyArray<{ label: string; listModelsRaw?: () => Promise<Array<ModelEntry>> }>
 }
 
 const defaultDeps: ModelsListDeps = {
   enabled: config.fleetRouting,
-  hosts: fleet.map((h) => ({ listModelsRaw: h.backend.listModelsRaw?.bind(h.backend) })),
+  hosts: fleet.map((h) => ({ label: h.label, listModelsRaw: h.backend.listModelsRaw?.bind(h.backend) })),
 }
 
 /** Concatenate catalogs, keeping the first entry per id so the higher-priority host wins duplicates. */
@@ -39,7 +39,10 @@ export async function mergedModelsResponse(deps: ModelsListDeps = defaultDeps): 
   if (!deps.enabled || hosts.length < 2) return null
 
   const results = await Promise.allSettled(hosts.map((h) => h.listModelsRaw!()))
-  const lists = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
+  // owned_by names the host dispatch will pick (the first in priority order), so "where will this go?" is answerable.
+  const lists = results.flatMap((r, i) =>
+    r.status === 'fulfilled' ? [r.value.map((entry) => ({ ...entry, owned_by: hosts[i].label }))] : [],
+  )
   if (lists.length === 0) return null
 
   return Response.json({ object: 'list', data: mergeModelLists(lists) })
