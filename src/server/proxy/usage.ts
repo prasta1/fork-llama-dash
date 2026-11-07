@@ -3,11 +3,11 @@ export type Usage = {
   promptTokens: number | null
   completionTokens: number | null
   totalTokens: number | null
-  // Anthropic prompt-caching counters. Cached prompt tokens are billed at a
-  // different rate (creation ~1.25x, read ~0.1x of input) so we track them
-  // separately rather than folding into promptTokens.
+  // Prompt-caching counters stay separate from prompt tokens because providers
+  // may bill or report cache reads differently.
   cacheCreationTokens: number | null
   cacheReadTokens: number | null
+  cacheReadTokensIncludedInPrompt?: boolean
 }
 
 export type UsageWithClose = Usage & {
@@ -32,18 +32,28 @@ const pickModel = (body: RawJson): string | null => {
   if (typeof body.model === 'string') return body.model
   const msg = asRecord(body.message)
   if (msg && typeof msg.model === 'string') return msg.model
+  const response = asRecord(body.response)
+  if (response && typeof response.model === 'string') return response.model
   return null
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
-const readUsageRecord = (rec: RawJson): Partial<Usage> => ({
-  promptTokens: num(rec.prompt_tokens) ?? num(rec.input_tokens),
-  completionTokens: num(rec.completion_tokens) ?? num(rec.output_tokens),
-  totalTokens: num(rec.total_tokens),
-  cacheCreationTokens: num(rec.cache_creation_input_tokens),
-  cacheReadTokens: num(rec.cache_read_input_tokens),
-})
+const readUsageRecord = (rec: RawJson): Partial<Usage> => {
+  const inputTokenDetails = asRecord(rec.input_tokens_details)
+  const cachedTokens = inputTokenDetails ? num(inputTokenDetails.cached_tokens) : null
+  return {
+    promptTokens: num(rec.prompt_tokens) ?? num(rec.input_tokens),
+    completionTokens: num(rec.completion_tokens) ?? num(rec.output_tokens),
+    totalTokens: num(rec.total_tokens),
+    cacheCreationTokens:
+      num(rec.cache_creation_input_tokens) ?? (inputTokenDetails ? num(inputTokenDetails.cache_write_tokens) : null),
+    cacheReadTokens: num(rec.cache_read_input_tokens) ?? cachedTokens,
+    // OpenAI Responses includes cache reads in input_tokens; Anthropic's
+    // cache_read_input_tokens is a separate counter.
+    cacheReadTokensIncludedInPrompt: cachedTokens != null || undefined,
+  }
+}
 
 const pickUsage = (body: RawJson): Partial<Usage> => {
   const u = asRecord(body.usage)
@@ -53,11 +63,22 @@ const pickUsage = (body: RawJson): Partial<Usage> => {
     const mu = asRecord(msg.usage)
     if (mu) return readUsageRecord(mu)
   }
+  const response = asRecord(body.response)
+  if (response) {
+    const ru = asRecord(response.usage)
+    if (ru) return readUsageRecord(ru)
+  }
   const t = asRecord(body.timings)
   if (t) {
     return {
       promptTokens: num(t.prompt_n),
       completionTokens: num(t.predicted_n),
+    }
+  }
+  if ('timings/prompt_n' in body || 'timings/predicted_n' in body) {
+    return {
+      promptTokens: num(body['timings/prompt_n']),
+      completionTokens: num(body['timings/predicted_n']),
     }
   }
   return {}
@@ -96,6 +117,11 @@ export class SseUsageScanner {
     }
   }
 
+  /** True once the stream's `data: [DONE]` terminator has been seen. */
+  get sawDone(): boolean {
+    return this.doneAtMs != null
+  }
+
   done(closeAtMs?: number): UsageWithClose {
     if (this.buf.length > 0) {
       this.processEvent(this.buf, closeAtMs ?? Date.now())
@@ -126,8 +152,16 @@ export class SseUsageScanner {
         if (u.totalTokens != null) this.usage.totalTokens = u.totalTokens
         if (u.cacheCreationTokens != null) this.usage.cacheCreationTokens = u.cacheCreationTokens
         if (u.cacheReadTokens != null) this.usage.cacheReadTokens = u.cacheReadTokens
-        // Anthropic terminates streams with {type:"message_stop"}; treat it like [DONE].
-        if (body.type === 'message_stop' && this.doneAtMs == null) this.doneAtMs = at
+        if (u.cacheReadTokensIncludedInPrompt) this.usage.cacheReadTokensIncludedInPrompt = true
+        // Anthropic and OpenAI Responses terminate streams with an explicit event rather than [DONE].
+        if (
+          (body.type === 'message_stop' ||
+            body.type === 'response.completed' ||
+            body.type === 'response.failed' ||
+            body.type === 'response.incomplete') &&
+          this.doneAtMs == null
+        )
+          this.doneAtMs = at
       } catch {
         // ignore malformed chunks
       }

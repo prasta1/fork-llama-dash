@@ -1,9 +1,10 @@
-import { Agent, fetch as undiciFetch, type RequestInit as UndiciRequestInit } from 'undici'
+import { Agent, type RequestInit as UndiciRequestInit, fetch as undiciFetch } from 'undici'
 import { getPrivacySettings } from '../admin/settings.ts'
 import { config } from '../config.ts'
 import type { ApiKey } from '../db/schema.ts'
 import type { ProxyForwardBody } from './body.ts'
-import { headersToRecord, filterResponseHeaders, redactSensitiveHeaders } from './headers.ts'
+import type { CompressionOutcome } from './context-compression.ts'
+import { filterResponseHeaders, headersToRecord, redactSensitiveHeaders } from './headers.ts'
 import { writeRequestLog } from './log.ts'
 import { recordTokenUsage } from './rate-limiter.ts'
 import { BoundedTextCapture } from './text-capture.ts'
@@ -33,6 +34,7 @@ export type ProxyLogInput = {
   reqModel: string | null
   attribution: Attribution
   routing: RoutingOutcome
+  compression?: CompressionOutcome
   credentialInjectionJson?: string | null
 }
 
@@ -51,6 +53,20 @@ export function nullUsage(model?: string | null): UsageWithClose {
     cacheCreationTokens: null,
     cacheReadTokens: null,
     streamCloseMs: null,
+  }
+}
+
+function isChatGptCodexResponsesUrl(upstream: string): boolean {
+  const url = new URL(upstream)
+  return url.origin === 'https://chatgpt.com' && url.pathname === '/backend-api/codex/responses'
+}
+
+function isStreamingRequest(body: ProxyForwardBody): boolean {
+  if (typeof body !== 'string') return false
+  try {
+    return JSON.parse(body).stream === true
+  } catch {
+    return false
   }
 }
 
@@ -90,6 +106,7 @@ export function writeProxyLog(input: ProxyLogInput) {
     totalTokens: input.usage.totalTokens,
     cacheCreationTokens: input.usage.cacheCreationTokens,
     cacheReadTokens: input.usage.cacheReadTokens,
+    cacheReadTokensIncludedInPrompt: input.usage.cacheReadTokensIncludedInPrompt,
     streamed: input.streamed,
     error: input.error,
     requestHeaders: input.reqHeaders,
@@ -114,6 +131,12 @@ export function writeProxyLog(input: ProxyLogInput) {
     routingRoutedModel: input.routing.routedModel,
     routingRejectReason: input.routing.rejectReason,
     credentialInjectionJson: input.credentialInjectionJson ?? null,
+    compressionPolicyId: input.compression?.policyId ?? null,
+    compressionPolicyName: input.compression?.policyName ?? null,
+    compressionStatus: input.compression?.status ?? null,
+    compressionInputTokens: input.compression?.inputTokens ?? null,
+    compressionOutputTokens: input.compression?.outputTokens ?? null,
+    compressionElapsedMs: input.compression?.elapsedMs ?? null,
   })
 }
 
@@ -158,6 +181,7 @@ export async function forwardUpstreamAndLog(input: {
   attribution: Attribution
   routing: RoutingOutcome
   credentialInjectionJson?: string | null
+  compression?: CompressionOutcome
 }): Promise<Response | { upstreamError: string }> {
   let upstreamResponse: Awaited<ReturnType<typeof undiciFetch>>
   try {
@@ -179,8 +203,11 @@ export async function forwardUpstreamAndLog(input: {
   const resHeadersObj = filterResponseHeaders(upstreamResponse.headers)
   const resHeadersJson = JSON.stringify(redactSensitiveHeaders(headersToRecord(upstreamResponse.headers)))
   const contentType = upstreamResponse.headers.get('content-type') ?? ''
-  const isSse = contentType.includes('text/event-stream')
-  const isJson = contentType.includes('application/json')
+  const isHeaderlessCodex = !contentType && isChatGptCodexResponsesUrl(input.upstream)
+  // ChatGPT's Codex endpoint omits Content-Type. Its stream mode still uses
+  // SSE, which needs the event scanner for usage and assembled-text logging.
+  const isSse = contentType.includes('text/event-stream') || (isHeaderlessCodex && isStreamingRequest(input.body))
+  const isJson = contentType.includes('application/json') || (isHeaderlessCodex && !isSse)
   const isBinaryResponse = !isSse && !isJson
   const captureResponseBodies = getPrivacySettings().captureResponseBodies
 
@@ -203,6 +230,7 @@ export async function forwardUpstreamAndLog(input: {
       attribution: input.attribution,
       routing: input.routing,
       credentialInjectionJson: input.credentialInjectionJson,
+      compression: input.compression,
     })
     return new Response(null, { status: upstreamResponse.status, headers: resHeadersObj })
   }
@@ -211,11 +239,19 @@ export async function forwardUpstreamAndLog(input: {
   const decoder = isBinaryResponse ? null : new TextDecoder()
   const sseScanner = isSse ? new SseUsageScanner() : null
   const responseCapture = decoder ? new BoundedTextCapture() : null
+  // A client may hang up while a read is pending (SSE clients often close the
+  // socket as soon as they see `data: [DONE]`). cancel() then logs the request;
+  // the pending pull must not touch the controller or log a second row --
+  // closing a cancelled stream throws "Invalid state: Controller is already
+  // closed".
+  let cancelled = false
+  let logged = false
 
   const responseBody = new ReadableStream<Uint8Array>({
     async pull(controller) {
       try {
         const { value, done } = await reader.read()
+        if (cancelled) return
         if (done) {
           controller.close()
           if (decoder) {
@@ -240,6 +276,7 @@ export async function forwardUpstreamAndLog(input: {
             usage.totalTokens = usage.promptTokens
           }
 
+          logged = true
           writeProxyLog({
             startedAt: input.startedAt,
             status: upstreamResponse.status,
@@ -258,6 +295,7 @@ export async function forwardUpstreamAndLog(input: {
             attribution: input.attribution,
             routing: input.routing,
             credentialInjectionJson: input.credentialInjectionJson,
+            compression: input.compression,
           })
 
           if (input.keyRow?.rateLimitTpm != null && usage.totalTokens != null) {
@@ -272,8 +310,10 @@ export async function forwardUpstreamAndLog(input: {
           if (sseScanner) sseScanner.feed(text, Date.now())
         }
       } catch (err) {
+        if (cancelled || logged) return
         controller.error(err)
         const message = err instanceof Error ? err.message : String(err)
+        logged = true
         writeProxyLog({
           startedAt: input.startedAt,
           status: upstreamResponse.status,
@@ -292,11 +332,15 @@ export async function forwardUpstreamAndLog(input: {
           attribution: input.attribution,
           routing: input.routing,
           credentialInjectionJson: input.credentialInjectionJson,
+          compression: input.compression,
         })
       }
     },
     cancel() {
+      cancelled = true
       reader.cancel().catch(() => {})
+      if (logged) return
+      logged = true
       writeProxyLog({
         startedAt: input.startedAt,
         status: upstreamResponse.status,
@@ -305,7 +349,8 @@ export async function forwardUpstreamAndLog(input: {
         endpoint: input.endpoint,
         usage: sseScanner ? sseScanner.done(Date.now()) : nullUsage(input.reqModel),
         streamed: isSse,
-        error: 'Client disconnected',
+        // A client that read the stream to [DONE] got the whole reply.
+        error: sseScanner?.sawDone ? null : 'Client disconnected',
         reqHeaders: input.reqHeadersJson,
         reqBody: input.reqBody,
         resHeaders: resHeadersJson,
@@ -315,6 +360,7 @@ export async function forwardUpstreamAndLog(input: {
         attribution: input.attribution,
         routing: input.routing,
         credentialInjectionJson: input.credentialInjectionJson,
+        compression: input.compression,
       })
     },
   })

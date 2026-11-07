@@ -23,12 +23,13 @@ OpenAI SDK / Claude Code / Continue / Open WebUI
 
 ## ✨ What it does
 
-- **Watch the box** — live request, token, model, upstream, GPU, and update status in one dashboard.
-- **Manage models** — load/unload models, inspect per-model stats and capability metadata, view residency history, and edit llama-swap config with validation.
-- **Proxy clients** — expose one OpenAI/Anthropic-compatible `/v1/*` endpoint for local models, peers, direct upstreams, Claude Code, Continue, Open WebUI, and more.
+- **Watch the box** — live request, token, model, upstream, CPU/GPU, update status, and static inference-host inventory in one dashboard.
+- **Manage models** — load/unload models, inspect per-model stats, capabilities, and llama-swap selector routing, view residency history, and edit llama-swap config with validation.
+- **Proxy clients** — expose OpenAI/Anthropic-compatible `/v1/*` endpoints, native llama.cpp `POST /infill`, and llama-swap's `/audiocpp/*` passthrough for local models, peers, direct upstreams, Claude Code, Continue, Open WebUI, and more.
 - **Track requests** — searchable request history with filters, histograms, detail views, attribution metadata, token counts, and cost estimates.
-- **Control access** — dashboard login, hashed API keys, per-key RPM/TPM limits, model allow-lists, MCP relay allow-lists, and per-key usage breakdowns.
+- **Control access** — dashboard login, hashed API keys, per-key RPM/TPM limits, explicit allow-all or restricted model access, unavailable-model cleanup, MCP relay allow-lists, and per-key usage breakdowns.
 - **Enforce policy** — routing rules for model rewrites, rejects, passthrough auth, direct HTTPS upstreams, encrypted credentials, system prompts, and global request size limits.
+- **Compress agent context** — optional, policy-scoped Headroom sidecar compression for large OpenAI and Anthropic message histories, with fail-open forwarding.
 - **Test models** — playgrounds for chat, image, speech, and transcription, including article-to-speech extraction.
 - **Export ops data** — raw log streams, retention controls, request auditing, and low-cardinality Prometheus metrics at `/metrics`.
 - **Move fast** — `g`-leader keyboard navigation (`g d` dashboard, `g r` requests, `g l` logs, …), `j`/`k`/`Enter` through the request list, and `H`/`L` between request details.
@@ -95,20 +96,25 @@ OpenAI SDK / Claude Code / Continue / Open WebUI
 
 ## ⚡ Quick start (Docker Compose)
 
-Choose the compose file that matches your GPU vendor. Both setups use `./config/config.yaml` for llama-swap config, `./models/` for model files, and expose llama-dash on `http://localhost:3000`.
+Choose the compose file that matches your GPU vendor. Both setups pull the published `ghcr.io/ndom91/llama-dash:latest` image, use `./config/config.yaml` for llama-swap config, mount `./models/` for model files, and expose llama-dash on `http://localhost:3000`.
 
-First create your env and config files, then set the required secrets:
+Clone the repository for its Compose files and example configuration, then create the local environment and llama-swap config:
 
 ```bash
-cp .env.example .env       # then set BETTER_AUTH_SECRET and CREDENTIAL_ENCRYPTION_KEY
-cp config/config.example.yaml config/config.yaml   # edit models
+git clone https://github.com/ndom91/llama-dash.git
+cd llama-dash
+cp .env.example .env
+cp config/config.example.yaml config/config.yaml
 ```
 
-The compose files load `.env` via `env_file` and won't start without it. Generate a session secret with `openssl rand -base64 33`. See the [Environment](#️-environment) table for all values.
+Set `BETTER_AUTH_SECRET` in `.env` to the output of `openssl rand -base64 33`. The compose files load `.env` via `env_file` and won't start without it. `CREDENTIAL_ENCRYPTION_KEY` is only needed if you later store upstream provider credentials.
+
+Place a GGUF model in `./models/`, then set the matching path and model ID in `config/config.yaml`. The supplied example expects `./models/llama-3.gguf` and declares it as `llama3`.
 
 ### AMD / ROCm
 
 ```bash
+docker compose -f docker-compose.amd.yaml pull
 docker compose -f docker-compose.amd.yaml up -d
 ```
 
@@ -117,10 +123,19 @@ docker compose -f docker-compose.amd.yaml up -d
 ### NVIDIA / CUDA
 
 ```bash
+docker compose -f docker-compose.nvidia.yaml pull
 docker compose -f docker-compose.nvidia.yaml up -d
 ```
 
 `docker-compose.nvidia.yaml` runs `ghcr.io/mostlygeek/llama-swap:cuda` and requests `gpus: all` for the llama-swap service. This requires the NVIDIA Container Toolkit on the host. The config directory is mounted into both services so llama-dash can atomically save `config.yaml` and llama-swap can reload it through `-watch-config`.
+
+Set `LLAMA_DASH_IMAGE_TAG` to a release tag to pin llama-dash to a specific version. Contributors can build locally instead by adding `-f docker-compose.build.yaml` and `--build` to either command, for example:
+
+```bash
+docker compose -f docker-compose.amd.yaml -f docker-compose.build.yaml up -d --build
+```
+
+Open `http://localhost:3000`, create the first dashboard user, then load your configured model from **Models**. llama-dash runs database migrations automatically when it starts.
 
 ## 🏗️ Manual setup
 
@@ -138,6 +153,8 @@ pnpm install
 pnpm db:migrate        # creates data/dash.db
 pnpm dev               # http://localhost:5173
 ```
+
+For optional bare-metal Headroom context compression, see the [Headroom setup guide](./docs/2026_09_07_headroom_bare_metal_setup.md).
 
 ## 🏔️ Environment
 

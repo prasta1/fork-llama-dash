@@ -299,6 +299,54 @@
   --duration-micro: 100ms;
   --duration-normal: 150ms;
   --duration-slow: 250ms;
+
+  /* New motion primitives are intentionally namespaced. The dashboard already
+     has established --duration-* and --ease-* values used throughout its UI. */
+  --motion-duration-stagger: 40ms;
+  --motion-duration-micro: 80ms;
+  --motion-duration-quick: 150ms;
+  --motion-duration-fast: 250ms;
+  --motion-duration-medium: 350ms;
+  --motion-duration-slow: 400ms;
+  --motion-duration-very-slow: 500ms;
+  --motion-ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-ease-in-out: ease-in-out;
+  --motion-ease-out: ease-out;
+  --motion-ease-linear: linear;
+  --motion-ease-bounce: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --motion-ease-bounce-strong: cubic-bezier(0.34, 3.85, 0.64, 1);
+  --motion-distance-micro: 4px;
+  --motion-distance-small: 6px;
+  --motion-distance-base: 8px;
+  --motion-distance-medium: 12px;
+  --motion-distance-large: 30px;
+  --motion-scale-large: 0.96;
+  --motion-scale-medium: 0.97;
+  --motion-scale-small: 0.98;
+  --motion-scale-tiny: 0.99;
+  --motion-blur-small: 2px;
+  --motion-blur-medium: 3px;
+  --motion-blur-large: 8px;
+
+  --acc-expand: var(--motion-duration-fast);
+  --acc-collapse: var(--motion-duration-fast);
+  --acc-chevron: var(--motion-duration-fast);
+  --acc-ease: var(--motion-ease-smooth-out);
+
+  --check-opacity-dur: var(--motion-duration-very-slow);
+  --check-rotate-dur: var(--motion-duration-very-slow);
+  --check-rotate-from: 20deg;
+  --check-bob-dur: var(--motion-duration-very-slow);
+  --check-y-amount: var(--motion-distance-base);
+  --check-blur-dur: var(--motion-duration-very-slow);
+  --check-blur-from: var(--motion-blur-large);
+  --check-path-dur: var(--motion-duration-very-slow);
+  --check-path-delay: var(--motion-duration-micro);
+  --check-ease-out: var(--motion-ease-smooth-out);
+  --check-ease-opacity: var(--motion-ease-smooth-out);
+  --check-ease-rotate: var(--motion-ease-smooth-out);
+  --check-ease-bob: var(--motion-ease-bounce);
+  --check-ease-path: var(--motion-ease-smooth-out);
 }
 
 /*
@@ -485,6 +533,155 @@
   height: 100vh;
   width: 100vw;
   background: var(--bg-0);
+}
+/* Collapsed (desktop): the sidebar is an icon rail; links center their icon. */
+@media (min-width: 769px) {
+  .app-shell-collapsed {
+    grid-template-columns: 52px 1fr;
+  }
+  .app-shell-collapsed nav[aria-label='Primary'] a {
+    justify-content: center;
+    padding-inline: 0;
+  }
+}
+
+/* Grid tracks keep disclosure content in flow while it expands and collapses. */
+.t-acc-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--acc-collapse) var(--acc-ease);
+}
+.t-acc[data-open='true'] .t-acc-panel {
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--acc-expand) var(--acc-ease);
+}
+.t-acc-panel-inner {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  filter: blur(2px);
+  transition:
+    opacity var(--acc-collapse) var(--acc-ease),
+    filter var(--acc-collapse) var(--acc-ease);
+}
+.t-acc[data-open='true'] .t-acc-panel-inner {
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    opacity var(--acc-expand) var(--acc-ease),
+    filter var(--acc-expand) var(--acc-ease);
+}
+.t-acc-chevron {
+  display: inline-flex;
+  transform: scaleY(1);
+  transform-origin: center;
+  transition: transform var(--acc-chevron) var(--acc-ease);
+}
+.t-acc-chevron path { vector-effect: non-scaling-stroke; }
+.t-acc[data-open='true'] .t-acc-chevron {
+  transform: scaleY(-1);
+}
+
+.motion-panel {
+  display: block;
+  opacity: 1;
+  translate: 0;
+  filter: blur(0);
+  transition:
+    display var(--motion-duration-medium),
+    opacity var(--motion-duration-medium) var(--motion-ease-smooth-out),
+    translate var(--motion-duration-medium) var(--motion-ease-smooth-out),
+    filter var(--motion-duration-medium) var(--motion-ease-smooth-out);
+  transition-behavior: allow-discrete;
+}
+@starting-style {
+  .motion-panel {
+    opacity: 0;
+    translate: 0 var(--motion-distance-medium);
+    filter: blur(var(--motion-blur-small));
+  }
+}
+.motion-panel[hidden] {
+  display: none;
+  opacity: 0;
+  translate: 0 var(--motion-distance-medium);
+  filter: blur(var(--motion-blur-small));
+}
+
+.motion-toggle {
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease-smooth-out),
+    border-color var(--motion-duration-fast) var(--motion-ease-smooth-out);
+}
+.motion-toggle-thumb {
+  transition: transform var(--motion-duration-fast) var(--motion-ease-smooth-out);
+}
+
+.t-success-check {
+  display: inline-block;
+  transform-origin: center;
+  opacity: 0;
+  will-change: transform, opacity, filter;
+}
+.t-success-check svg { display: block; overflow: visible; }
+.t-success-check svg path {
+  stroke-dasharray: 18;
+  stroke-dashoffset: 18;
+}
+.t-success-check[data-state='in'] {
+  animation:
+    t-check-fade var(--check-opacity-dur) var(--check-ease-opacity) forwards,
+    t-check-rotate var(--check-rotate-dur) var(--check-ease-rotate) forwards,
+    t-check-blur var(--check-blur-dur) var(--check-ease-out) forwards,
+    t-check-bob var(--check-bob-dur) var(--check-ease-bob) forwards;
+}
+.t-success-check[data-state='in'] svg path {
+  animation: t-check-draw var(--check-path-dur) var(--check-ease-path) var(--check-path-delay, 0ms) forwards;
+}
+@keyframes t-check-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes t-check-rotate {
+  from { transform: rotate(var(--check-rotate-from)); }
+  to { transform: rotate(0deg); }
+}
+@keyframes t-check-blur {
+  from { filter: blur(var(--check-blur-from)); }
+  to { filter: blur(0); }
+}
+@keyframes t-check-bob {
+  from { translate: 0 var(--check-y-amount); }
+  to { translate: 0 0; }
+}
+@keyframes t-check-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-acc-panel,
+  .t-acc-panel-inner,
+  .t-acc-chevron,
+  .motion-panel,
+  .motion-toggle,
+  .motion-toggle-thumb,
+  .t-success-check,
+  .copy-icon-swap-from,
+  .copy-icon-swap-to,
+  .copy-text-swap-from,
+  .copy-text-swap-to {
+    transition: none !important;
+  }
+
+  .t-success-check {
+    animation: none !important;
+    opacity: 1;
+  }
+
+  .t-success-check svg path {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+  }
 }
 
 @keyframes badge-in {
@@ -1175,6 +1372,8 @@
   pointer-events: none;
   color: var(--fg);
   scrollbar-width: none;
+  /* widths are set from JS to mirror the textarea's scrollbar gutters */
+  border: 0 solid transparent;
 }
 .config-highlight::-webkit-scrollbar {
   display: none;
@@ -1429,14 +1628,27 @@ textarea:focus-visible {
   box-shadow: none;
 }
 
-/* Honor reduced-motion preference — instrument panels don't need to breathe */
+/* Honor reduced motion without compressing every transition to a near-zero
+   duration, which can make state changes more abrupt or break animation-driven
+   UI. New motion primitives provide their own local reduced-motion rule. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
+  .animate-pulse,
+  .animate-pulse-ok,
+  .animate-pulse-warn,
+  .animate-pg-pulse,
+  .animate-skel-pulse,
+  .animate-spin,
+  .spin,
+  .stream-flow-bar,
+  .ticker-in,
+  .ticker-out,
+  [class*='animate-['] {
+    animation: none !important;
+  }
+
+  .requests-refresh-ring {
+    animation: none;
+    stroke-dashoffset: 0;
   }
 }
 
@@ -3036,14 +3248,20 @@ a,
 
 /* Skeleton loading placeholders */
 @keyframes skel-pulse {
-  0%, 100% { opacity: 0.12; }
-  50% { opacity: 0.22; }
+  0%, 100% { opacity: 0.08; }
+  50% { opacity: 0.13; }
 }
 .skel {
   display: inline-block;
   background: var(--fg);
   border-radius: var(--radius-sm, 4px);
   animation: skel-pulse 1.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel {
+    animation: none;
+    opacity: 0.10;
+  }
 }
 .skel-text {
   height: 12px;
@@ -3074,20 +3292,55 @@ a,
 }
 .copy-icon-swap-from,
 .copy-icon-swap-to {
-  transition: opacity var(--duration-normal) var(--ease-out),
-    transform var(--duration-normal) var(--ease-out);
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-in-out),
+    transform var(--motion-duration-fast) var(--motion-ease-in-out),
+    filter var(--motion-duration-fast) var(--motion-ease-in-out);
 }
 .copy-icon-swap-to {
   position: absolute;
   inset: 0;
   opacity: 0;
-  transform: scale(0.8);
+  transform: scale(var(--motion-scale-medium));
+  filter: blur(var(--motion-blur-small));
 }
 .copy-icon-swap-done .copy-icon-swap-from {
   opacity: 0;
-  transform: scale(0.8);
+  transform: scale(var(--motion-scale-medium));
+  filter: blur(var(--motion-blur-small));
 }
 .copy-icon-swap-done .copy-icon-swap-to {
   opacity: 1;
   transform: scale(1);
+  filter: blur(0);
+}
+
+/* Copy labels retain their widest state in the layout while the visible text
+   crosses over in place, preventing button width from jumping on confirmation. */
+.copy-text-swap {
+  display: inline-grid;
+}
+.copy-text-swap-from,
+.copy-text-swap-to {
+  grid-area: 1 / 1;
+  white-space: nowrap;
+  transition:
+    opacity var(--motion-duration-quick) var(--motion-ease-in-out),
+    transform var(--motion-duration-quick) var(--motion-ease-in-out),
+    filter var(--motion-duration-quick) var(--motion-ease-in-out);
+}
+.copy-text-swap-to {
+  opacity: 0;
+  transform: translateY(var(--motion-distance-micro));
+  filter: blur(var(--motion-blur-small));
+}
+.copy-text-swap-done .copy-text-swap-from {
+  opacity: 0;
+  transform: translateY(calc(var(--motion-distance-micro) * -1));
+  filter: blur(var(--motion-blur-small));
+}
+.copy-text-swap-done .copy-text-swap-to {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
 }

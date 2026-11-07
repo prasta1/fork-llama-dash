@@ -1,6 +1,8 @@
 import { hasDashboardUsers } from '../../auth.ts'
+import { readActivitySummary } from '../../activity.ts'
 import { config } from '../../config.ts'
 import { databasePathInfo } from '../../db/index.ts'
+import { fleet } from '../../inference/fleet.ts'
 import { getGpuSnapshot } from '../../gpu-poller.ts'
 import { inferenceBackend } from '../../inference/backend.ts'
 import { getRequestLogQueueStats } from '../../proxy/log.ts'
@@ -45,12 +47,16 @@ export const systemRoutes: Route[] = [
       const gpu = getGpuSnapshot()
       const now = Date.now()
       const gitCommit = typeof __GIT_COMMIT__ === 'string' ? __GIT_COMMIT__ : 'unknown'
+      const [update, inferenceHardware] = await Promise.all([
+        getUpdateCheck(gitCommit),
+        inferenceBackend.hardware?.().catch(() => null) ?? Promise.resolve(null),
+      ])
       return json(200, {
         runtime: {
           uptimeSec: Math.round(process.uptime()),
           nodeVersion: process.version,
           gitCommit,
-          update: await getUpdateCheck(gitCommit),
+          update,
         },
         database: {
           path: databasePathInfo.filename,
@@ -67,9 +73,11 @@ export const systemRoutes: Route[] = [
           label: backend.label,
           capabilities: backend.capabilities,
         },
+        inferenceHardware,
         logging: getRequestLogQueueStats(),
         gpu: {
           available: gpu.available,
+          cpuUtilizationPercent: gpu.cpuUtilizationPercent,
           driver: gpu.driver,
           gpuCount: gpu.gpus.length,
           polledAt: gpu.polledAt,
@@ -77,6 +85,36 @@ export const systemRoutes: Route[] = [
           gpus: gpu.gpus,
         },
       })
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/fleet$/,
+    handler: async (request) => {
+      const url = new URL(request.url)
+      const rawWindow = Number(url.searchParams.get('window') ?? '7')
+      const windowDays = Number.isFinite(rawWindow) && rawWindow >= 1 ? Math.min(Math.round(rawWindow), 90) : 7
+      const hosts = await Promise.all(
+        fleet.map(async (host) => {
+          const [health, models, running, activity] = await Promise.all([
+            host.backend.health().catch(() => ({ reachable: false, error: 'unreachable' })),
+            host.backend.listModels().catch(() => []),
+            host.backend.listRunning?.().catch(() => []) ?? Promise.resolve([]),
+            Promise.resolve(readActivitySummary(host.activityStorePath, windowDays)),
+          ])
+          return {
+            id: host.id,
+            label: host.label,
+            primary: host.primary,
+            upstreamHost: host.backend.info.upstreamHost,
+            health,
+            models,
+            running,
+            activity,
+          }
+        }),
+      )
+      return json(200, { hosts })
     },
   },
   {

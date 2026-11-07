@@ -46,8 +46,8 @@ policies/filters, and logging all hang off.
 src/
   routes/                 — TanStack Router file-routes (UI + __root.tsx)
     index.tsx               · / dashboard home
-    models.index.tsx        · /models list + load/unload actions
-    models.$id.tsx          · /models/:id detail (stats, history, config snippet)
+    models.index.tsx        · /models list + load/unload actions + llama-swap selector routing
+    models.$id.tsx          · /models/:id detail (stats, history, config snippet, selector targets)
     requests.index.tsx      · /requests log with filtering, sorting, histogram
     requests.$id.tsx        · /requests/:id detail view
     keys.index.tsx          · /keys list + create/revoke/delete
@@ -67,6 +67,7 @@ src/
     attribution/           · attribution settings page + setup examples
     policies/              · routing and request-limit editing panels
     requests/              · request list/detail pages and payload helpers
+    policies/              · routing, credentials, MCP relays, and context-compression policies
     config/, logs/         · config editor + log viewer feature-local pieces
   components/             — shared UI components reused across features
     Sidebar.tsx             · nav + `g`-leader shortcuts + VRAM-resident readout in footer
@@ -87,7 +88,8 @@ src/
   server/                 — everything that runs in Node, never shipped to client
     auth.ts               — Better Auth dashboard session config + first-user signup guard + passkeys
     config.ts             — env-var loader (INFERENCE_BASE_URL, DATABASE_PATH, …)
-    gpu-poller.ts         — polls nvidia-smi/rocm-smi/system_profiler for GPU stats
+    cpu-poller.ts         — samples inference-host CPU counters from procfs
+    gpu-poller.ts         — polls nvidia-smi/rocm-smi/system_profiler and combines hardware telemetry
     model-watcher.ts      — polls /running every 15s, writes load/unload events
     db/                   — drizzle schema + SQLite init; migrations are applied explicitly with pnpm db:migrate
     proxy/                — /v1/* pass-through: context, handler, auth, body snapshots, transforms, forwarding, usage, queued logging, rate limits
@@ -109,20 +111,21 @@ paths (proxy will grow middleware; admin will grow CRUD).
 
 ## How it's wired
 
-- `src/server/proxy/*` — the `/v1/*` pass-through: streaming SSE preserved, proxy context/body snapshots kept isolated, bounded request/response capture for logs, token counts scraped from responses as they fly by, and one queued SQLite row per completed request.
+- `src/server/proxy/*` — the `/v1/*`, native llama.cpp `/infill`, and llama-swap `/audiocpp/*` pass-through: streaming SSE preserved, proxy context/body snapshots kept isolated, bounded request/response capture for logs, token counts scraped from responses as they fly by, and one queued SQLite row per completed request.
 - `src/server/pricing.ts` — startup-cached `models.dev` model pricing used to estimate logged request cost from upstream usage counters.
 - `src/server/admin/*` — the `/api/*` admin surface consumed by the UI, with grouped route modules under `src/server/admin/routes/*` for models, requests, config, keys, aliases, routing, MCP relays, upstream credentials, settings, and system health. JSON GET responses support conditional ETag polling, `/api/events` streams lightweight dashboard events, and `/api/log-events` streams llama-swap logs only while the Logs page is mounted.
 - `src/server/article-extract.ts` — server-side article URL fetcher for the Speech playground. It validates public HTTP(S) URLs, caps HTML fetch size/time, parses readable article text with Readability, and returns editable text for TTS.
 - `src/server/mcp-relay/*` — configured `/mcp-relays/:slug` reverse proxies for coding-agent MCP HTTP transports. Relays require `x-llama-dash-api-key`, the key must allow the relay, stored upstream credentials are injected into outbound headers, responses stream through, and the exchange is logged without exposing provider secrets. Successful relay requests are metadata-only by default; failures keep the normal bounded debug capture policy.
-- `src/server/auth.ts` — Better Auth setup for dashboard username/password and passkey sessions; protects UI and `/api/*`, not `/v1/*`. Signup is only allowed while no dashboard user exists.
-- `src/server/gpu-poller.ts` — polls `nvidia-smi` / `rocm-smi` / `system_profiler` every 10s, caches result in memory, and publishes GPU-change events for live dashboard refresh. AMD APUs use GTT (not VRAM) for actual usable memory; Apple shows unified memory and core count when available.
+- `src/server/auth.ts` — Better Auth setup for dashboard username/password and passkey sessions; protects UI and `/api/*`, not inference proxy paths (`/v1/*` and `/infill`). Signup is only allowed while no dashboard user exists.
+- `src/server/gpu-poller.ts` — polls inference-host CPU counters plus `nvidia-smi` / `rocm-smi` / `system_profiler` every 10s, caches result in memory, and publishes hardware-change events for live dashboard refresh. AMD APUs use GTT (not VRAM) for actual usable memory; Apple shows unified memory and core count when available.
 - `src/server/model-watcher.ts` — polls the inference backend running-model capability every 15s, diffs state, writes load/unload events to `model_events` table, and publishes model-change events.
 - `src/server/inference/*` — selected inference backend facade plus backend-specific adapters and hints.
-- `src/server/llama-swap/client.ts` — typed client over llama-swap's HTTP API, including v229 `/v1/models` capability metadata.
-- `src/server/db/*` — Drizzle schema, SQLite initialization, and request/model-event indexes for common dashboard query paths. Apply migrations explicitly with `pnpm db:migrate`.
+- `src/server/llama-swap/client.ts` — typed client over llama-swap's HTTP API, including v229 `/v1/models` capability metadata and v247 inference-host hardware snapshots.
+- `src/server/db/*` — Drizzle schema, SQLite initialization, and request/model-event indexes for common dashboard query paths. Migrations run at server startup; `pnpm db:migrate` remains available for manual operation.
 - `src/server/request-log-maintenance.ts` — hourly request-log retention cleanup plus manual prune/compact admin actions to keep the SQLite file bounded on high-frequency relay traffic.
 - `src/server/metrics.ts` — Prometheus text metrics for proxy requests, tokens, latency window gauges, queue depth/drops, upstream reachability, running models, and GPU gauges at `/metrics`.
-- `Dockerfile`, `prod-server.mjs`, `docker-compose.amd.yaml`, `docker-compose.nvidia.yaml` — production container packaging for llama-dash by itself or bundled with llama-swap.
+- `Dockerfile`, `prod-server.mjs`, `docker-compose.amd.yaml`, `docker-compose.nvidia.yaml` — production container packaging for llama-dash by itself or bundled with llama-swap. Compose pulls the GHCR image by default; `docker-compose.build.yaml` is the local-build override.
+- `.github/workflows/publish-docker.yml` — publishes multi-platform (`linux/amd64`, `linux/arm64`) GHCR images from `main` and version tags.
 - `src/routes/*` — thin TanStack Start route entrypoints for `/`, `/login`, `/models`, `/models/:id`, `/requests`, `/logs`, `/system`, `/playground`, `/config`, `/settings`, `/keys`, `/keys/:id`, `/attribution`, `/policies`, `/endpoints`.
 - `src/features/*` — feature-local page components and helpers grouped by route area (`dashboard`, `requests`, `keys`, `models`, `playground`, etc.).
 - `src/lib/queries.ts` — TanStack Query hooks with SSE-driven cache invalidation for request, model, GPU, and system changes plus slow ETag polling fallback.
@@ -135,12 +138,13 @@ paths (proxy will grow middleware; admin will grow CRUD).
    metadata + optional bodies/headers), `model_events` (load/unload
    event-sourced timeline), `api_keys` (hashed keys + rate limits + ACLs +
    system prompt + MCP relay allow-lists), `model_aliases` (global model name mapping),
-   `routing_rules` (ordered request routing rules), `upstream_credentials`
+    `routing_rules` (ordered request routing rules), `context_compression_policies`
+   (ordered Headroom compression policy matchers), `upstream_credentials`
    (encrypted direct-upstream bearer credentials), `mcp_relays` (configured
    MCP reverse proxies with credential bindings), `settings` (key-value
    config like request limits and attribution header mapping), and Better Auth's
    `user`, `session`, `account`, and `verification` tables for dashboard sessions.
-3. `/v1/*` pass-through proxy that streams SSE unchanged and queues one log row
+3. `/v1/*`, native llama.cpp `/infill`, and llama-swap `/audiocpp/*` pass-through proxy that streams SSE unchanged and queues one log row
    per completed request with token counts pulled from the final SSE `usage` chunk (or
    the JSON `usage` field for non-streamed responses). `handler.ts` owns the
    high-level flow, `context.ts` owns request-scoped proxy state transitions,
@@ -176,14 +180,14 @@ paths (proxy will grow middleware; admin will grow CRUD).
     - `/api/model-timeline` — load/unload events for timeline viz
     - `/api/events` — lightweight llama-dash dashboard invalidation/data events
     - `/api/log-events` — llama-swap log SSE stream used only by the Logs page
-   - `/api/gpu` — cached GPU stats (VRAM, utilization, temp, power)
+    - `/api/gpu` — cached container CPU and GPU stats (VRAM, utilization, temp, power)
    - `/api/system` — runtime, update status, DB, proxy, log queue, and poller status with GPU device details
    - `/api/system/request-logs/prune`, `/api/system/database/compact` — manual request-log retention and SQLite compaction actions
    - `/api/playground/article-extract` — fetch and Readability-parse an article URL into clean text for Speech playground TTS
    - `/api/config` — read/save llama-swap config with schema validation enforced before writes
    - `/api/config/validate` — validate config content against llama-swap's published JSON schema
    - `/api/keys` — CRUD for API keys (create, list, revoke, delete)
-   - `/api/keys/:id` — key detail (stats, model breakdown, recent requests); PATCH accepts `name`, `allowedModels`, `allowedMcpRelays`, `systemPrompt`
+    - `/api/keys/:id` — key detail (stats, model breakdown, recent requests); PATCH accepts `name`, `modelAccessMode`, `allowedModels`, `allowedMcpRelays`, `systemPrompt`
     - `/api/aliases` — CRUD for model aliases (global model name mapping)
     - `/api/routing-rules` — CRUD + reorder for ordered routing rules
     - `/api/upstream-credentials` — encrypted bearer credential vault for direct upstream routing and MCP relays
@@ -196,11 +200,12 @@ paths (proxy will grow middleware; admin will grow CRUD).
 7. GPU poller: auto-detects NVIDIA (`nvidia-smi`), AMD (`rocm-smi`), or
    Apple Silicon (`system_profiler`). Polls every 10s (static-only for
    Apple), caches snapshots, and publishes GPU-change dashboard events. AMD uses GTT memory (not BIOS-limited VRAM) for APUs.
+   The System view also shows llama-swap's static `/api/hardware` snapshot for the inference host, including CPU, memory, OS, environment, and accelerator driver inventory.
 8. Model watcher: polls the selected backend's running-model capability every
    15s, diffs against known state, inserts `load`/`unload` events into SQLite,
    and publishes model-change dashboard events.
 9. UI views: Login (Better Auth username/password + passkey form), Dashboard (stats, timeline, running models, upstream+GPU,
-    recent requests), Models (list + load/unload + capability badges + per-model detail),
+    recent requests), Models (list + load/unload + capability badges + llama-swap selector routing + per-model detail),
     Requests (filtered/sorted log + histogram + detail), Logs, System (runtime,
     update status, DB, proxy, queue, and GPU poller/device status), Playground
     (chat plus request/response/timing/events/curl inspector tabs; speech TTS
@@ -217,7 +222,7 @@ paths (proxy will grow middleware; admin will grow CRUD).
 10. API key auth + rate limiting. Keys are SHA-256 hashed at rest,
    shown once on creation. When keys exist in DB, proxy requires
    `Authorization: Bearer sk-...`. Per-key RPM/TPM token-bucket rate
-   limiting (in-memory, resets on restart). Per-key model allow-lists and MCP relay allow-lists.
+   limiting (in-memory, resets on restart). Per-key model access is explicitly `all` or `restricted`; a restricted key may allow zero models. The API Key detail page identifies unavailable configured models and offers explicit cleanup without broadening access. MCP relay allow-lists remain separate.
    Routing rules can explicitly opt into `passthrough` auth, which skips
    llama-dash key enforcement for matching requests and can preserve the
    client's `Authorization` header for upstream OAuth/API-key validation.
@@ -429,6 +434,7 @@ Format: `{prefix}_{ulid}`, e.g. `req_01J5A3KWGF9QXRZ0N1BVCH6YPM`.
 | ApiKey      | `key`  |
 | ModelAlias  | `mal`  |
 | McpRelay    | `mrl`  |
+| ContextCompressionPolicy | `ccp` |
 
 When adding a new table, pick a short (2–4 char) lowercase prefix, add it
 to the table above, and generate the ID at insert time via `ulidx`:
@@ -517,6 +523,8 @@ sort lexicographically by creation time).
 ## llama-swap API surface we consume
 
 - `POST /v1/*` — forward OpenAI / Anthropic calls unchanged (after our middleware)
+- `POST /infill` — forward native llama.cpp FIM requests unchanged (after the same auth and routing middleware)
+- `/audiocpp/*` — forward llama-swap's audio.cpp UI and API passthrough unchanged (after the same auth and routing middleware)
 - `GET /running` — which models are currently loaded
 - `POST /models/unload` — unload a model
 - `GET /upstream/:model_id/*` — proxy directly to a specific llama-server (useful for `/metrics`)

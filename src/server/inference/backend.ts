@@ -1,4 +1,5 @@
 import { config } from '../config.ts'
+import type { InferenceHardware } from '../../lib/schemas/inference-hardware.ts'
 import { createLlamaSwapBackend } from './backends/llama-swap.ts'
 
 export type InferenceBackendKind = 'llama-swap'
@@ -30,10 +31,18 @@ export type InferenceHealth = {
 export type BackendModel = {
   id: string
   name: string
-  kind: 'local' | 'peer'
+  kind: 'local' | 'peer' | 'selector'
   peerId: string | null
+  selector: BackendModelSelector | null
+  running: boolean
   contextLength: number | null
   capabilities: BackendModelCapabilities
+}
+
+export type BackendModelSelector = {
+  strategy: string
+  targets: Array<string>
+  spillover: number | null
 }
 
 export type BackendModelCapabilities = {
@@ -58,6 +67,7 @@ export type InferenceBackend = {
   eventStreamUrl?: string
   listModels(): Promise<Array<BackendModel>>
   listRunning?(): Promise<Array<BackendRunningModel>>
+  hardware?(): Promise<InferenceHardware>
   modelLogNames?(modelId: string): Array<string>
   modelConfigSnippet?(modelId: string): string | null
   modelContextLengthHints?(): Map<string, number>
@@ -67,7 +77,7 @@ export type InferenceBackend = {
 }
 
 function createInferenceBackend(kind: string): InferenceBackend {
-  if (kind === 'llama-swap') return createLlamaSwapBackend()
+  if (kind === 'llama-swap') return createLlamaSwapBackend(config.inferenceBaseUrl)
   throw new Error(`Unsupported INFERENCE_BACKEND "${kind}". Supported backends: llama-swap`)
 }
 

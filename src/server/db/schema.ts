@@ -45,6 +45,12 @@ export const requests = sqliteTable(
     routingRoutedModel: text('routing_routed_model'),
     routingRejectReason: text('routing_reject_reason'),
     credentialInjectionJson: text('credential_injection_json'),
+    compressionPolicyId: text('compression_policy_id'),
+    compressionPolicyName: text('compression_policy_name'),
+    compressionStatus: text('compression_status'),
+    compressionInputTokens: integer('compression_input_tokens'),
+    compressionOutputTokens: integer('compression_output_tokens'),
+    compressionElapsedMs: integer('compression_elapsed_ms'),
   },
   (table) => [
     index('idx_requests_started_at').on(table.startedAt),
@@ -56,6 +62,18 @@ export const requests = sqliteTable(
 
 export type Request = typeof requests.$inferSelect
 export type NewRequest = typeof requests.$inferInsert
+
+export const contextCompressionPolicies = sqliteTable('context_compression_policies', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  order: integer('order').notNull(),
+  matchJson: text('match_json').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+export type ContextCompressionPolicy = typeof contextCompressionPolicies.$inferSelect
 
 export const modelEvents = sqliteTable(
   'model_events',
@@ -79,6 +97,9 @@ export const apiKeys = sqliteTable('api_keys', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   disabledAt: integer('disabled_at', { mode: 'timestamp_ms' }),
   expiresAt: integer('expires_at', { mode: 'timestamp_ms' }),
+  modelAccessMode: text('model_access_mode', { enum: ['all', 'restricted'] })
+    .notNull()
+    .default('all'),
   allowedModels: text('allowed_models').notNull().default('[]'),
   allowedMcpRelays: text('allowed_mcp_relays').notNull().default('[]'),
   rateLimitRpm: integer('rate_limit_rpm'),

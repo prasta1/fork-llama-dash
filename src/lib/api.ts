@@ -2,15 +2,21 @@ import * as v from 'valibot'
 import type { BaseIssue, BaseSchema, InferOutput } from 'valibot'
 import { ArticleExtractResponseSchema } from './schemas/article'
 import { ApiKeyCreatedSchema, ApiKeyListResponseSchema, KeyDetailResponseSchema } from './schemas/api-key'
+import type { ModelAccessMode } from './schemas/api-key'
 import { ModelAliasListResponseSchema, ModelAliasSchema } from './schemas/model-alias'
 import { McpRelayListResponseSchema, McpRelaySchema } from './schemas/mcp-relay'
 import { RoutingRuleListResponseSchema, RoutingRuleSchema } from './schemas/routing-rule'
+import {
+  ContextCompressionPolicyListResponseSchema,
+  ContextCompressionPolicySchema,
+} from './schemas/context-compression'
 import { UpstreamCredentialListResponseSchema, UpstreamCredentialSchema } from './schemas/upstream-credential'
 import { AttributionSettingsSchema, PrivacySettingsSchema, RequestLimitsSchema } from './schemas/settings'
 import { ApiSystemStatusSchema, LoginMetaSchema } from './schemas/system'
 import { ApiConfigReadSchema, ApiConfigSaveResultSchema, ApiConfigValidationSchema } from './schemas/config'
 import { GpuSnapshotSchema } from './schemas/gpu'
 import { ApiHealthSchema } from './schemas/health'
+import { FleetResponseSchema } from './schemas/fleet'
 import { ModelDetailResponseSchema, ModelsResponseSchema, ModelTimelineResponseSchema } from './schemas/model'
 import {
   HistogramResponseSchema,
@@ -42,13 +48,23 @@ export type {
   ApiConfigValidation,
   ApiConfigSaveResult,
 } from './schemas/config'
-export type { ApiKeyItem, ApiKeyCreated, ApiKeyDetail, ApiKeyStats, ApiKeyModelBreakdown } from './schemas/api-key'
+export type {
+  ApiKeyItem,
+  ApiKeyCreated,
+  ApiKeyDetail,
+  ApiKeyStats,
+  ApiKeyModelBreakdown,
+  ModelAccessMode,
+} from './schemas/api-key'
 export type { ModelAliasItem } from './schemas/model-alias'
 export type { McpRelay } from './schemas/mcp-relay'
 export type { RoutingRule, RoutingMatch, RoutingAction } from './schemas/routing-rule'
+export type { ContextCompressionPolicy, ContextCompressionMatch } from './schemas/context-compression'
 export type { UpstreamCredential } from './schemas/upstream-credential'
 export type { AttributionSettings, PrivacySettings, RequestLimits } from './schemas/settings'
 export type { ApiSystemStatus, LoginMeta } from './schemas/system'
+export type { ApiFleetHost, ApiFleetResponse } from './schemas/fleet'
+export type { InferenceHardware } from './schemas/inference-hardware'
 export type { ArticleExtractResponse } from './schemas/article'
 
 type AnySchema = BaseSchema<unknown, unknown, BaseIssue<unknown>>
@@ -119,6 +135,10 @@ export const api = {
   validateConfig: (content: string) =>
     sendJson('/api/config/validate', ApiConfigValidationSchema, { method: 'POST', body: { content } }),
   health: () => getJson('/api/health', ApiHealthSchema),
+  fleet: (windowDays?: number) => {
+    const q = windowDays != null ? `?window=${windowDays}` : ''
+    return getJson(`/api/fleet${q}`, FleetResponseSchema)
+  },
   loginMeta: () => getJson('/api/login-meta', LoginMetaSchema),
   systemStatus: () => getJson('/api/system', ApiSystemStatusSchema),
   requestStats: () => getJson('/api/requests/stats', ApiRequestStatsSchema),
@@ -138,6 +158,7 @@ export const api = {
   listKeys: () => getJson('/api/keys', ApiKeyListResponseSchema),
   createKey: (body: {
     name: string
+    modelAccessMode?: ModelAccessMode
     allowedModels?: Array<string>
     allowedMcpRelays?: Array<string>
     rateLimitRpm?: number | null
@@ -147,8 +168,8 @@ export const api = {
     expiresAt?: string | null
   }) => sendJson('/api/keys', ApiKeyCreatedSchema, { method: 'POST', body }),
   renameKey: (id: string, name: string) => sendJson(`/api/keys/${id}`, OkSchema, { method: 'PATCH', body: { name } }),
-  updateKeyModels: (id: string, allowedModels: Array<string>) =>
-    sendJson(`/api/keys/${id}`, OkSchema, { method: 'PATCH', body: { allowedModels } }),
+  updateKeyModels: (id: string, modelAccessMode: ModelAccessMode, allowedModels: Array<string>) =>
+    sendJson(`/api/keys/${id}`, OkSchema, { method: 'PATCH', body: { modelAccessMode, allowedModels } }),
   updateKeyMcpRelays: (id: string, allowedMcpRelays: Array<string>) =>
     sendJson(`/api/keys/${id}`, OkSchema, { method: 'PATCH', body: { allowedMcpRelays } }),
   updateKeySystemPrompt: (id: string, systemPrompt: string | null) =>
@@ -163,6 +184,19 @@ export const api = {
     sendJson(`/api/aliases/${id}`, ModelAliasSchema, { method: 'PATCH', body }),
   deleteAlias: (id: string) => sendEmpty(`/api/aliases/${id}`, OkSchema, 'DELETE'),
   listRoutingRules: () => getJson('/api/routing-rules', RoutingRuleListResponseSchema),
+  listContextCompressionPolicies: () =>
+    getJson('/api/context-compression/policies', ContextCompressionPolicyListResponseSchema),
+  createContextCompressionPolicy: (body: { name: string; enabled: boolean; match: object }) =>
+    sendJson('/api/context-compression/policies', ContextCompressionPolicySchema, { method: 'POST', body }),
+  updateContextCompressionPolicy: (id: string, body: { name?: string; enabled?: boolean; match?: object }) =>
+    sendJson(`/api/context-compression/policies/${id}`, ContextCompressionPolicySchema, { method: 'PATCH', body }),
+  deleteContextCompressionPolicy: (id: string) =>
+    sendEmpty(`/api/context-compression/policies/${id}`, OkSchema, 'DELETE'),
+  reorderContextCompressionPolicies: (ids: string[]) =>
+    sendJson('/api/context-compression/policies/reorder', ContextCompressionPolicyListResponseSchema, {
+      method: 'POST',
+      body: { ids },
+    }),
   listUpstreamCredentials: () => getJson('/api/upstream-credentials', UpstreamCredentialListResponseSchema),
   listMcpRelays: () => getJson('/api/mcp-relays', McpRelayListResponseSchema),
   createMcpRelay: (body: {
