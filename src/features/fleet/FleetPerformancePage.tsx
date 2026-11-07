@@ -132,7 +132,7 @@ export function FleetPerformancePage() {
           }
         />
 
-        <section className="panel !rounded-none !border-x-0 !bg-surface-1">
+        <section className="panel shrink-0 !rounded-none !border-x-0 !bg-surface-1">
           {data == null ? (
             <div className="empty-state px-6 max-md:px-3">loading performance…</div>
           ) : !hasActivity ? (
