@@ -200,6 +200,7 @@ export function writeRequestLogNow(row: RequestLogInput) {
         streamed: row.streamed,
         error: row.error,
         clientHost: row.clientHost,
+        nodeId: row.nodeId,
         clientName: row.clientName,
         endUserId: row.endUserId,
         sessionId: row.sessionId,

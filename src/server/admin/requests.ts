@@ -28,6 +28,7 @@ type RequestSummarySource = Pick<
   | 'streamed'
   | 'error'
   | 'clientHost'
+  | 'nodeId'
   | 'clientName'
   | 'endUserId'
   | 'sessionId'
@@ -77,6 +78,7 @@ export function toRequestRow(row: RequestSummarySource, keyName: string | null):
     error: row.error,
     keyName,
     clientHost: row.clientHost,
+    nodeId: row.nodeId,
     clientName: row.clientName,
     endUserId: row.endUserId,
     sessionId: row.sessionId,
@@ -123,6 +125,7 @@ export function listRecentRequests(opts: { limit: number; cursor?: string; inclu
       error: schema.requests.error,
       keyId: schema.requests.keyId,
       clientHost: schema.requests.clientHost,
+      nodeId: schema.requests.nodeId,
       clientName: schema.requests.clientName,
       endUserId: schema.requests.endUserId,
       sessionId: schema.requests.sessionId,
@@ -203,6 +206,7 @@ export function getRequestById(id: string): RequestDetail | null {
     responseBody: recent?.responseBody ?? r.responseBody,
     streamCloseMs: r.streamCloseMs,
     clientHost: r.clientHost,
+    nodeId: r.nodeId,
     clientName: r.clientName,
     endUserId: r.endUserId,
     sessionId: r.sessionId,

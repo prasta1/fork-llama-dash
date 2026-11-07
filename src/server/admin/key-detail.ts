@@ -95,6 +95,7 @@ export function getKeyRequests(
       error: r.error,
       keyName: null,
       clientHost: r.clientHost,
+      nodeId: r.nodeId,
       clientName: r.clientName,
       endUserId: r.endUserId,
       sessionId: r.sessionId,

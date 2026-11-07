@@ -19,6 +19,8 @@ export const ApiRequestSchema = v.object({
   error: v.nullable(v.string()),
   keyName: v.nullable(v.string()),
   clientHost: v.nullable(v.string()),
+  // Fleet host that served the request; null for rows logged before multi-node or direct (cloud) targets.
+  nodeId: v.nullable(v.string()),
   clientName: v.nullable(v.string()),
   endUserId: v.nullable(v.string()),
   sessionId: v.nullable(v.string()),

@@ -125,6 +125,7 @@ export function getModelRequests(
       error: r.error,
       keyName: null,
       clientHost: r.clientHost,
+      nodeId: r.nodeId,
       clientName: r.clientName,
       endUserId: r.endUserId,
       sessionId: r.sessionId,
