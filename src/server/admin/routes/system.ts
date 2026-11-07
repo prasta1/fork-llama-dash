@@ -12,6 +12,32 @@ import { error, json, type Route } from './types.ts'
 
 const DIRECT_TARGETS = ['https://api.openai.com/v1', 'https://api.anthropic.com/v1']
 
+/** Health and capabilities per fleet host. */
+function fleetNodeStatus() {
+  return Promise.all(
+    fleet.map(async (host) => {
+      const { reachable, latencyMs, version, error } = (await host.backend.health()) as {
+        reachable: boolean
+        latencyMs?: number
+        version?: string
+        error?: string
+      }
+      return {
+        id: host.id,
+        label: host.label,
+        primary: host.primary,
+        upstreamHost: host.backend.info.upstreamHost,
+        health: { reachable, latencyMs, version, error },
+        // Config editing reads INFERENCE_CONFIG_FILE, a local path that only describes the primary.
+        capabilities: {
+          ...host.backend.info.capabilities,
+          config: host.backend.info.capabilities.config && host.primary,
+        },
+      }
+    }),
+  )
+}
+
 export const systemRoutes: Route[] = [
   {
     method: 'GET',
@@ -47,9 +73,10 @@ export const systemRoutes: Route[] = [
       const gpu = getGpuSnapshot()
       const now = Date.now()
       const gitCommit = typeof __GIT_COMMIT__ === 'string' ? __GIT_COMMIT__ : 'unknown'
-      const [update, inferenceHardware] = await Promise.all([
+      const [update, inferenceHardware, nodes] = await Promise.all([
         getUpdateCheck(gitCommit),
         inferenceBackend.hardware?.().catch(() => null) ?? Promise.resolve(null),
+        fleet.length > 1 ? fleetNodeStatus() : Promise.resolve([]),
       ])
       return json(200, {
         runtime: {
@@ -74,6 +101,7 @@ export const systemRoutes: Route[] = [
           capabilities: backend.capabilities,
         },
         inferenceHardware,
+        nodes,
         logging: getRequestLogQueueStats(),
         gpu: {
           available: gpu.available,

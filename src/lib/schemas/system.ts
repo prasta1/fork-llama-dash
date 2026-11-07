@@ -2,6 +2,15 @@ import * as v from 'valibot'
 import { GpuInfoSchema } from './gpu'
 import { InferenceHardwareSchema } from './inference-hardware'
 
+const InferenceCapabilitiesSchema = v.object({
+  models: v.boolean(),
+  runningModels: v.boolean(),
+  lifecycle: v.boolean(),
+  logs: v.boolean(),
+  config: v.boolean(),
+  metrics: v.boolean(),
+})
+
 export const ApiSystemStatusSchema = v.object({
   runtime: v.object({
     uptimeSec: v.number(),
@@ -28,15 +37,24 @@ export const ApiSystemStatusSchema = v.object({
   inference: v.object({
     kind: v.string(),
     label: v.string(),
-    capabilities: v.object({
-      models: v.boolean(),
-      runningModels: v.boolean(),
-      lifecycle: v.boolean(),
-      logs: v.boolean(),
-      config: v.boolean(),
-      metrics: v.boolean(),
-    }),
+    capabilities: InferenceCapabilitiesSchema,
   }),
+  // One entry per fleet host; empty for a single-host fleet, where the panels above already say it all.
+  nodes: v.array(
+    v.object({
+      id: v.string(),
+      label: v.string(),
+      primary: v.boolean(),
+      upstreamHost: v.string(),
+      health: v.object({
+        reachable: v.boolean(),
+        latencyMs: v.optional(v.number()),
+        version: v.optional(v.string()),
+        error: v.optional(v.string()),
+      }),
+      capabilities: InferenceCapabilitiesSchema,
+    }),
+  ),
   inferenceHardware: v.nullable(InferenceHardwareSchema),
   logging: v.object({
     queued: v.number(),
