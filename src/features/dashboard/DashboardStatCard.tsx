@@ -72,7 +72,7 @@ function useCountUp(value: string, duration = 450): string {
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current)
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / duration)
-      const eased = 1 - Math.pow(1 - t, 3)
+      const eased = 1 - (1 - t) ** 3
       const current = from + (target - from) * eased
       const decimals = match[1].includes('.') ? match[1].split('.')[1].length : 0
       setDisplay(`${current.toFixed(decimals)}${suffix}`)

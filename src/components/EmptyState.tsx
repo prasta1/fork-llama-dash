@@ -11,7 +11,7 @@ export function EmptyState({ icon: Icon, children, className }: Props) {
     <div className={`empty-state empty-state-inviting flex flex-col items-center gap-2.5 py-9 ${className ?? ''}`}>
       {Icon ? (
         <span className="flex size-9 items-center justify-center rounded-full border border-border bg-surface-2 text-fg-faint">
-          <Icon className="size-4" aria-hidden="true" />
+          <Icon className="size-4" aria-hidden />
         </span>
       ) : null}
       <div className="max-w-[42ch] text-center leading-[1.5]">{children}</div>
