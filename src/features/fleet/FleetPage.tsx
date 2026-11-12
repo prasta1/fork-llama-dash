@@ -69,6 +69,11 @@ export function FleetPage() {
 function HostCard({ host }: { host: ApiFleetHost }) {
   const reachable = host.health.reachable
   const resident = host.running.filter((r) => r.state === 'ready').length
+  // Running models not yet ready (starting/stopping) are counted per state so mid-transition work stays visible.
+  const transitioning = new Map<string, number>()
+  for (const r of host.running) {
+    if (r.state !== 'ready') transitioning.set(r.state, (transitioning.get(r.state) ?? 0) + 1)
+  }
   const total = host.models.length
   const healthError = host.health.error ?? null
 
@@ -91,6 +96,11 @@ function HostCard({ host }: { host: ApiFleetHost }) {
         <span>
           <span className="text-fg">{resident}</span>/{total} ready
         </span>
+        {[...transitioning].map(([state, count]) => (
+          <span key={state}>
+            <span className="text-fg">{count}</span> {state}
+          </span>
+        ))}
         {host.health.latencyMs != null ? <span>{host.health.latencyMs}ms</span> : null}
         {host.health.version ? <span className="truncate">{host.health.version}</span> : null}
       </div>

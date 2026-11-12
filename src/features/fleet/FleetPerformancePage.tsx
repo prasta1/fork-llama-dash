@@ -4,6 +4,7 @@ import { PageHeader } from '../../components/PageHeader'
 import { RouteError } from '../../components/RouteError'
 import { cn } from '../../lib/cn'
 import { useFleet } from '../../lib/queries'
+import { formatDuration } from '../models/modelUtils'
 
 type PerformanceRow = {
   hostId: string
@@ -26,7 +27,7 @@ const COLUMNS: Array<{ key: SortKey; label: string; num?: boolean; hideMobile?: 
   { key: 'host', label: 'host' },
   { key: 'model', label: 'model' },
   { key: 'tokPerSec', label: 'tok/s', num: true },
-  { key: 'avgDurationMs', label: 'avg ms', num: true, hideMobile: true },
+  { key: 'avgDurationMs', label: 'avg', num: true, hideMobile: true },
   { key: 'requests', label: 'reqs', num: true, hideMobile: true },
   { key: 'outputTokens', label: 'out tok', num: true, hideMobile: true },
   { key: 'errorCount', label: 'err', num: true, hideMobile: true },
@@ -45,20 +46,20 @@ function sortRows(rows: PerformanceRow[], key: SortKey, dir: SortDir): Performan
         cmp = a.model.localeCompare(b.model)
         break
       case 'tokPerSec':
-              cmp = (a.avgTokensPerSecond ?? -1) - (b.avgTokensPerSecond ?? -1)
-              break
-            case 'avgDurationMs':
-              cmp = (a.avgDurationMs ?? -1) - (b.avgDurationMs ?? -1)
-              break
-            case 'requests':
-              cmp = a.requests - b.requests
-              break
-            case 'outputTokens':
-              cmp = a.outputTokens - b.outputTokens
-              break
-            case 'errorCount':
-              cmp = a.errorCount - b.errorCount
-              break
+        cmp = (a.avgTokensPerSecond ?? -1) - (b.avgTokensPerSecond ?? -1)
+        break
+      case 'avgDurationMs':
+        cmp = (a.avgDurationMs ?? -1) - (b.avgDurationMs ?? -1)
+        break
+      case 'requests':
+        cmp = a.requests - b.requests
+        break
+      case 'outputTokens':
+        cmp = a.outputTokens - b.outputTokens
+        break
+      case 'errorCount':
+        cmp = a.errorCount - b.errorCount
+        break
     }
     return cmp * dirMult
   })
@@ -154,9 +155,7 @@ export function FleetPerformancePage() {
           {data == null ? (
             <div className="empty-state px-6 max-md:px-3">loading performance…</div>
           ) : !hasActivity ? (
-            <div className="empty-state px-6 py-4 max-md:px-3">
-              no activity recorded in the last {windowDays} days.
-            </div>
+            <div className="empty-state px-6 py-4 max-md:px-3">no activity recorded in the last {windowDays} days.</div>
           ) : (
             <div className="overflow-auto">
               <table className="dtable">
@@ -211,7 +210,7 @@ export function FleetPerformancePage() {
                         {r.avgTokensPerSecond != null ? r.avgTokensPerSecond.toFixed(1) : '—'}
                       </td>
                       <td className="num hide-mobile font-mono text-[11px] text-fg-dim">
-                        {r.avgDurationMs != null ? r.avgDurationMs.toFixed(0) : '—'}
+                        {r.avgDurationMs != null ? formatDuration(Math.round(r.avgDurationMs)) : '—'}
                       </td>
                       <td className="num hide-mobile font-mono text-[11px] text-fg-dim">
                         {r.requests >= 1000 ? `${(r.requests / 1000).toFixed(1)}k` : r.requests}
@@ -220,11 +219,7 @@ export function FleetPerformancePage() {
                         {r.outputTokens >= 1000 ? `${(r.outputTokens / 1000).toFixed(0)}k` : r.outputTokens}
                       </td>
                       <td className="num hide-mobile font-mono text-[11px] text-fg-dim">
-                        {r.errorCount > 0 ? (
-                          <span className="text-err">{r.errorCount}</span>
-                        ) : (
-                          '0'
-                        )}
+                        {r.errorCount > 0 ? <span className="text-err">{r.errorCount}</span> : '0'}
                       </td>
                     </tr>
                   ))}
