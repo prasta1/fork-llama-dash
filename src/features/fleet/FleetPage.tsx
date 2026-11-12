@@ -140,19 +140,25 @@ function HostCard({ host }: { host: ApiFleetHost }) {
                 const state = run?.state ?? 'stopped'
                 const ctx = m.contextLength ?? run?.contextLength ?? null
                 const ttl = run?.ttl ?? null
+                const ctxLabel = ctx != null ? (ctx >= 1000 ? `${(ctx / 1000).toFixed(0)}k` : `${ctx}`) : null
+                const ttlLabel = ttl != null ? `${Math.round(ttl / 60)}m` : null
                 return (
                   <tr key={m.id}>
                     <td>
                       <StatusDot tone={stateTone(state, m.running)} live={m.running} />
                     </td>
                     <td className="mono break-all">{m.id}</td>
-                    <td className="font-mono text-[11px] text-fg-dim">{state}</td>
-                    <td className="hide-mobile font-mono text-[11px] text-fg-dim">
-                      {ctx != null ? (ctx >= 1000 ? `${(ctx / 1000).toFixed(0)}k` : ctx) : '—'}
+                    <td className="font-mono text-[11px] text-fg-dim">
+                      {state}
+                      {/* ctx/ttl columns are hidden on mobile (.hide-mobile, ≤768px), so fold them in here instead. */}
+                      {ctxLabel || ttlLabel ? (
+                        <div className="min-[769px]:hidden">
+                          {[ctxLabel && `ctx ${ctxLabel}`, ttlLabel && `ttl ${ttlLabel}`].filter(Boolean).join(' · ')}
+                        </div>
+                      ) : null}
                     </td>
-                    <td className="hide-mobile font-mono text-[11px] text-fg-dim">
-                      {ttl != null ? `${Math.round(ttl / 60)}m` : '—'}
-                    </td>
+                    <td className="hide-mobile font-mono text-[11px] text-fg-dim">{ctxLabel ?? '—'}</td>
+                    <td className="hide-mobile font-mono text-[11px] text-fg-dim">{ttlLabel ?? '—'}</td>
                   </tr>
                 )
               })}
