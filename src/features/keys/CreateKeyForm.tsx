@@ -1,20 +1,23 @@
 import { Check, KeyRound } from 'lucide-react'
 import { useState } from 'react'
 import { NumberInput } from '../../components/NumberInput'
-import type { ApiKeyCreated } from '../../lib/api'
+import type { ApiKeyCreated, ModelAccessMode } from '../../lib/api'
 import { cn } from '../../lib/cn'
 import { useCreateApiKey, useMcpRelays, useModels } from '../../lib/queries'
 
 type Props = {
+  open: boolean
   onCreated: (r: ApiKeyCreated) => void
   onCancel: () => void
+  onExited: () => void
 }
 
-export function CreateKeyForm({ onCreated, onCancel }: Props) {
+export function CreateKeyForm({ open, onCreated, onCancel, onExited }: Props) {
   const createKey = useCreateApiKey()
   const { data: models } = useModels()
   const { data: mcpRelays } = useMcpRelays()
   const [name, setName] = useState('')
+  const [modelAccessMode, setModelAccessMode] = useState<ModelAccessMode>('all')
   const [allowedModels, setAllowedModels] = useState<Array<string>>([])
   const [allowedMcpRelays, setAllowedMcpRelays] = useState<Array<string>>([])
   const [rpm, setRpm] = useState('')
@@ -45,6 +48,7 @@ export function CreateKeyForm({ onCreated, onCancel }: Props) {
     createKey.mutate(
       {
         name: name.trim(),
+        modelAccessMode,
         allowedModels,
         allowedMcpRelays,
         rateLimitRpm: rpm ? Number(rpm) : null,
@@ -65,7 +69,14 @@ export function CreateKeyForm({ onCreated, onCancel }: Props) {
   }
 
   return (
-    <form className="panel !rounded-none !border-x-0 !bg-surface-1 px-6 py-4 max-md:px-3" onSubmit={submit}>
+    <form
+      className="motion-panel panel !rounded-none !border-x-0 !bg-surface-1 px-6 py-4 max-md:px-3"
+      onSubmit={submit}
+      onTransitionEnd={(event) => {
+        if (event.target === event.currentTarget && event.propertyName === 'opacity' && !open) onExited()
+      }}
+      hidden={!open}
+    >
       <div className="mb-4 flex items-center gap-2 border-b border-border pb-3 text-sm">
         <KeyRound size={16} strokeWidth={2} />
         <strong>New API key</strong>
@@ -86,8 +97,30 @@ export function CreateKeyForm({ onCreated, onCancel }: Props) {
         <div className="flex flex-1 flex-col gap-1">
           <span className="text-xs font-medium text-fg-dim">Allowed models</span>
           <span className="text-[11px] text-fg-faint">
-            {allowedModels.length === 0 ? 'empty = all models' : `${allowedModels.length} selected`}
+            {modelAccessMode === 'all' ? 'all models' : `${allowedModels.length} selected`}
           </span>
+          <div className="flex gap-3 font-mono text-[11px] text-fg-dim">
+            <label className="flex cursor-pointer items-center gap-1.5">
+              <input
+                type="radio"
+                name="model-access-mode"
+                checked={modelAccessMode === 'all'}
+                onChange={() => setModelAccessMode('all')}
+                className="accent-accent"
+              />
+              Allow all
+            </label>
+            <label className="flex cursor-pointer items-center gap-1.5">
+              <input
+                type="radio"
+                name="model-access-mode"
+                checked={modelAccessMode === 'restricted'}
+                onChange={() => setModelAccessMode('restricted')}
+                className="accent-accent"
+              />
+              Restrict access
+            </label>
+          </div>
           <div className="flex flex-wrap gap-1.5">
             {models?.map((m) => {
               const selected = allowedModels.includes(m.id)
@@ -101,6 +134,7 @@ export function CreateKeyForm({ onCreated, onCancel }: Props) {
                       'border-accent bg-accent text-accent-on hover:border-accent hover:bg-accent-strong hover:text-accent-on',
                   )}
                   aria-pressed={selected}
+                  disabled={modelAccessMode === 'all'}
                   onClick={() => toggleModel(m.id)}
                 >
                   {selected ? <Check className="h-3 w-3" strokeWidth={2} aria-hidden="true" /> : null}

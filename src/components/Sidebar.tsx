@@ -3,6 +3,7 @@ import { useHotkeySequence } from '@tanstack/react-hotkeys'
 import { Link, useNavigate } from '@tanstack/react-router'
 import Avatar from 'boring-avatars'
 import {
+  Activity,
   Boxes,
   Fingerprint,
   KeyRound,
@@ -10,11 +11,13 @@ import {
   Link2,
   LogOut,
   MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
   ScrollText,
   ServerCog,
   Settings,
-  SlidersHorizontal,
   Shield,
+  SlidersHorizontal,
   Terminal,
   TriangleAlert,
 } from 'lucide-react'
@@ -22,16 +25,20 @@ import { useEffect, useRef, useState } from 'react'
 import { authClient } from '../lib/auth-client'
 import { cn } from '../lib/cn'
 import { LEADER_KEY } from '../lib/nav-leader'
-import { useMobileMenu } from '../lib/use-mobile-menu'
 import { useGpu, useModels, useRunningModels, useSystemStatus } from '../lib/queries'
 import type { ApiSystemStatus } from '../lib/schemas/system'
 import { useColorTheme } from '../lib/use-color-theme'
-import { StatusDot, stateTone } from './StatusDot'
+import { useMobileMenu } from '../lib/use-mobile-menu'
+import { CollapsedSidebarAccountMenu } from './CollapsedSidebarAccountMenu'
+import { CollapsedSidebarMetrics } from './CollapsedSidebarMetrics'
 import { Logo } from './Logo'
+import { StatusDot, stateTone } from './StatusDot'
 import { Tooltip } from './Tooltip'
 
 type NavTarget =
   | '/'
+  | '/fleet'
+  | '/fleet/performance'
   | '/models'
   | '/requests'
   | '/logs'
@@ -67,6 +74,8 @@ const SECTIONS: ReadonlyArray<NavSection> = [
     title: 'observe',
     items: [
       { to: '/', label: 'Dashboard', leader: 'd', Icon: LayoutDashboard },
+      { to: '/fleet', label: 'Fleet', leader: 'f', Icon: Boxes },
+      { to: '/fleet/performance', label: 'Performance', leader: 'v', Icon: Activity },
       { to: '/requests', label: 'Requests', leader: 'r', Icon: ScrollText },
       { to: '/logs', label: 'Logs', leader: 'l', Icon: Terminal },
       { to: '/system', label: 'System', leader: 's', Icon: ServerCog },
@@ -116,11 +125,14 @@ const NAV_LINK_ACTIVE = `${NAV_LINK} !bg-surface-3 !text-fg shadow-[inset_2px_0_
 type SidebarSession = ReturnType<typeof authClient.useSession>['data']
 
 type SidebarProps = {
+  /** Desktop only: an icon rail. Phones keep the slide-in menu at full width. */
+  collapsed?: boolean
+  onToggleCollapsed?: () => void
   initialSession?: SidebarSession | null
   initialCapabilities?: ApiSystemStatus['inference']['capabilities'] | null
 }
 
-export function Sidebar({ initialSession, initialCapabilities }: SidebarProps) {
+export function Sidebar({ collapsed = false, onToggleCollapsed, initialSession, initialCapabilities }: SidebarProps) {
   const { open, close } = useMobileMenu()
   const { data: system } = useSystemStatus()
   const updateAvailable = system?.runtime.update.status === 'available'
@@ -133,9 +145,16 @@ export function Sidebar({ initialSession, initialCapabilities }: SidebarProps) {
         open && 'max-md:translate-x-0',
       )}
     >
-      <div className="flex items-center gap-2.5 px-4 border-b border-border h-12">
-        <Logo />
-        <div className="ml-auto flex items-center gap-1.5">
+      <div
+        className={cn(
+          'flex items-center gap-2.5 px-4 border-b border-border h-12',
+          collapsed && 'md:justify-center md:px-0',
+        )}
+      >
+        <div className={cn(collapsed && 'md:hidden')}>
+          <Logo />
+        </div>
+        <div className={cn('ml-auto flex items-center gap-1.5', collapsed && 'md:hidden')}>
           {updateAvailable ? (
             <Tooltip label="Update available" side="bottom" align="end">
               <a
@@ -158,10 +177,50 @@ export function Sidebar({ initialSession, initialCapabilities }: SidebarProps) {
             {__GIT_COMMIT__}
           </a>
         </div>
+        {onToggleCollapsed ? (
+          <Tooltip label={collapsed ? 'Expand sidebar  [' : 'Collapse sidebar  ['} side="right">
+            <button
+              type="button"
+              className={cn(
+                'btn btn-ghost btn-icon group relative max-md:hidden',
+                !collapsed && '-mr-2',
+                collapsed && 'size-7 justify-center !p-0 hover:bg-surface-3',
+              )}
+              onClick={onToggleCollapsed}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-expanded={!collapsed}
+            >
+              {collapsed ? (
+                <>
+                  <Logo
+                    size={15}
+                    decorative
+                    className="transition-opacity duration-150 group-hover:opacity-0 group-focus-visible:opacity-0"
+                  />
+                  <PanelLeftOpen
+                    className="absolute inset-0 m-auto size-4 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                  />
+                </>
+              ) : (
+                <PanelLeftClose className="size-4" strokeWidth={1.75} aria-hidden="true" />
+              )}
+            </button>
+          </Tooltip>
+        ) : null}
       </div>
 
-      <SidebarNav onNavigate={close} initialCapabilities={initialCapabilities} />
-      <SidebarLiveStatus initialSession={initialSession} />
+      <SidebarNav onNavigate={close} initialCapabilities={initialCapabilities} collapsed={collapsed} />
+      <div className={cn(collapsed && 'md:hidden')}>
+        <SidebarLiveStatus initialSession={initialSession} />
+      </div>
+      {collapsed ? (
+        <>
+          <CollapsedSidebarMetrics />
+          <CollapsedSidebarAccountMenu initialSession={initialSession} />
+        </>
+      ) : null}
     </aside>
   )
 }
@@ -169,9 +228,11 @@ export function Sidebar({ initialSession, initialCapabilities }: SidebarProps) {
 function SidebarNav({
   onNavigate,
   initialCapabilities,
+  collapsed = false,
 }: {
   onNavigate: () => void
   initialCapabilities?: ApiSystemStatus['inference']['capabilities'] | null
+  collapsed?: boolean
 }) {
   const { data: running = [] } = useRunningModels()
   const { data: system } = useSystemStatus()
@@ -195,19 +256,27 @@ function SidebarNav({
       {visibleSections.flatMap((section) =>
         section.items.map((item) => <LeaderNavBinding key={item.to} to={item.to} leader={item.leader} />),
       )}
-      {visibleSections.map((section) => (
+      {visibleSections.map((section, sectionIndex) => (
         <div key={section.title}>
-          <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-fg-faint px-2.5 pt-3 pb-1.5">
+          <div
+            className={cn(
+              'font-mono text-[10px] uppercase tracking-[0.12em] text-fg-faint px-2.5 pt-3 pb-1.5',
+              collapsed && 'md:sr-only',
+            )}
+          >
             {section.title}
           </div>
+          {collapsed && sectionIndex > 0 ? (
+            <div className="max-md:hidden mx-2 my-2 border-t border-border" aria-hidden="true" />
+          ) : null}
           {section.items.map(({ to, label, leader, Icon }) => {
             const badge = to === '/models' && runningCount > 0 ? String(runningCount) : null
-            return (
+            const link = (
               <Link
                 key={to}
                 to={to}
                 className={NAV_LINK}
-                activeOptions={{ exact: to === '/' }}
+                activeOptions={{ exact: to === '/' || to === '/fleet' }}
                 activeProps={{ className: NAV_LINK_ACTIVE }}
                 onClick={onNavigate}
               >
@@ -217,15 +286,29 @@ function SidebarNav({
                     specified for key combinations, so "G D" would be announced
                     as two independent shortcuts. The sr-only text says it
                     properly instead. */}
-                <span className="nav-key flex w-7 shrink-0 items-center gap-px" aria-hidden="true">
+                <span
+                  className={cn('nav-key flex w-7 shrink-0 items-center gap-px', collapsed && 'md:hidden')}
+                  aria-hidden="true"
+                >
                   <kbd className="nav-key-leader">{LEADER_KEY}</kbd>
                   <kbd className="nav-key-target">{leader}</kbd>
                 </span>
                 <Icon className="size-4 shrink-0 text-current" strokeWidth={1.75} aria-hidden="true" />
-                <span>{label}</span>
+                <span className={cn(collapsed && 'md:sr-only')}>{label}</span>
                 <span className="sr-only">{`, shortcut ${LEADER_KEY} then ${leader}`}</span>
-                {badge != null ? <span className="ml-auto font-mono text-[10px] text-fg-dim">{badge}</span> : null}
+                {badge != null ? (
+                  <span className={cn('ml-auto font-mono text-[10px] text-fg-dim', collapsed && 'md:hidden')}>
+                    {badge}
+                  </span>
+                ) : null}
               </Link>
+            )
+            return collapsed ? (
+              <Tooltip key={to} label={badge != null ? `${label} · ${badge} running` : label} side="right">
+                {link}
+              </Tooltip>
+            ) : (
+              link
             )
           })}
         </div>
@@ -284,8 +367,11 @@ function SidebarLiveStatus({ initialSession }: SidebarProps) {
   const resident = runningCount > 0 ? running[visibleIdx % runningCount] : null
 
   const gpuCard = gpu?.available ? gpu.gpus[0] : null
+  const cpuUtilizationPercent = gpu?.cpuUtilizationPercent
+  const gpuUtilizationPercent = gpuCard?.utilizationPercent
   const hasVram = gpuCard?.memoryTotalMiB != null && gpuCard.memoryUsedMiB != null
   const fmtGiB = (mib: number) => (mib / 1024).toFixed(1)
+  const meterWidth = (percent: number | null | undefined) => `${Math.min(Math.max(percent ?? 0, 0), 100)}%`
 
   async function signOut() {
     await authClient.signOut()
@@ -295,38 +381,56 @@ function SidebarLiveStatus({ initialSession }: SidebarProps) {
   return (
     <div className="p-2.5 border-t border-border flex flex-col gap-2">
       <div className="py-2.5 px-3 border border-border rounded bg-surface-2 flex flex-col gap-2 overflow-x-clip">
-        <div className="flex justify-between items-center gap-2 text-[10px] font-mono tabular-nums uppercase tracking-[0.12em] text-fg-faint">
-          {/* The unit used to render outside the fallback, producing a literal
-              "- W". Apple and rocm-smi hardcode powerW: null in gpu-poller.ts,
-              so on those backends that readout was permanently broken-looking by
-              design. An absent row is better than a dash with a unit stuck to it. */}
-          <span className="text-fg-muted">{gpuCard?.powerW != null ? `${gpuCard.powerW} W` : ''}</span>
-          <span className="text-fg-muted">
-            {hasVram
-              ? `${fmtGiB(gpuCard.memoryUsedMiB!)} / ${fmtGiB(gpuCard.memoryTotalMiB!)} GiB`
-              : resident
-                ? // Was `${visibleIdx} of ${totalCount}` — visibleIdx is the
-                  // ticker's rotation index, not a count, so one running model of
-                  // twelve displayed "0 of 12" while the meter below used
-                  // runningCount and disagreed.
-                  `${runningCount} of ${totalCount}`
-                : 'idle'}
-          </span>
-        </div>
-        <div className="h-1 rounded-pill bg-surface-4 overflow-hidden my-1">
-          <div
-            className={cn(
-              'h-full rounded-pill transition-[width] duration-300',
-              hasVram && (gpuCard.memoryPercent ?? 0) >= 85 ? 'bg-warn shadow-[0_0_8px_var(--warn)]' : 'bg-accent',
-            )}
-            style={{
-              width: hasVram
-                ? `${gpuCard.memoryPercent ?? 0}%`
-                : totalCount > 0
-                  ? `${(runningCount / totalCount) * 100}%`
-                  : '0%',
-            }}
-          />
+        <div className="flex flex-col gap-2">
+          <div>
+            <div className="mb-1 flex items-center justify-between gap-2 font-mono text-[10px] tabular-nums uppercase tracking-[0.12em] text-fg-faint">
+              <span>{hasVram ? 'vram' : 'models'}</span>
+              <span className="text-fg-muted">
+                {hasVram
+                  ? `${fmtGiB(gpuCard.memoryUsedMiB!)} / ${fmtGiB(gpuCard.memoryTotalMiB!)} GiB`
+                  : resident
+                    ? `${runningCount} of ${totalCount}`
+                    : 'idle'}
+              </span>
+            </div>
+            <div className="h-1 overflow-hidden rounded-pill bg-surface-4">
+              <div
+                className={cn(
+                  'h-full rounded-pill transition-[width] duration-300',
+                  hasVram && (gpuCard.memoryPercent ?? 0) >= 85 ? 'bg-warn shadow-[0_0_8px_var(--warn)]' : 'bg-accent',
+                )}
+                style={{
+                  width: meterWidth(
+                    hasVram ? gpuCard.memoryPercent : totalCount > 0 ? (runningCount / totalCount) * 100 : 0,
+                  ),
+                }}
+              />
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 flex items-center justify-between gap-2 font-mono text-[10px] tabular-nums uppercase tracking-[0.12em] text-fg-faint">
+              <span>cpu</span>
+              <span className="text-fg-muted">{cpuUtilizationPercent != null ? `${cpuUtilizationPercent}%` : '—'}</span>
+            </div>
+            <div className="h-1 overflow-hidden rounded-pill bg-surface-4">
+              <div
+                className="h-full rounded-pill bg-accent transition-[width] duration-300"
+                style={{ width: meterWidth(cpuUtilizationPercent) }}
+              />
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 flex items-center justify-between gap-2 font-mono text-[10px] tabular-nums uppercase tracking-[0.12em] text-fg-faint">
+              <span>gpu</span>
+              <span className="text-fg-muted">{gpuUtilizationPercent != null ? `${gpuUtilizationPercent}%` : '—'}</span>
+            </div>
+            <div className="h-1 overflow-hidden rounded-pill bg-surface-4">
+              <div
+                className="h-full rounded-pill bg-accent transition-[width] duration-300"
+                style={{ width: meterWidth(gpuUtilizationPercent) }}
+              />
+            </div>
+          </div>
         </div>
         {resident ? (
           <div className={cn(slide === 'out' && 'ticker-out', slide === 'in' && 'ticker-in')}>

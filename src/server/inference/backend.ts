@@ -77,7 +77,7 @@ export type InferenceBackend = {
 }
 
 function createInferenceBackend(kind: string): InferenceBackend {
-  if (kind === 'llama-swap') return createLlamaSwapBackend()
+  if (kind === 'llama-swap') return createLlamaSwapBackend(config.inferenceBaseUrl)
   throw new Error(`Unsupported INFERENCE_BACKEND "${kind}". Supported backends: llama-swap`)
 }
 

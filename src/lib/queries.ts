@@ -24,11 +24,14 @@ import {
   type ApiRequestDetail,
   type ApiRequestStats,
   type ApiSystemStatus,
+  type ApiFleetResponse,
   type AttributionSettings,
   type ModelAliasItem,
   type McpRelay,
+  type ModelAccessMode,
   type PrivacySettings,
   type RoutingRule,
+  type ContextCompressionPolicy,
   type UpstreamCredential,
   type RequestLimits,
 } from './api'
@@ -55,6 +58,7 @@ function toastMutationError(title: string, error: Error) {
 
 export const qk = {
   health: ['health'] as const,
+  fleet: ['fleet'] as const,
   systemStatus: ['system'] as const,
   models: ['models'] as const,
   requests: ['requests'] as const,
@@ -70,6 +74,7 @@ export const qk = {
   keyDetail: (id: string) => ['keys', id] as const,
   aliases: ['aliases'] as const,
   routingRules: ['routing-rules'] as const,
+  contextCompressionPolicies: ['context-compression-policies'] as const,
   mcpRelays: ['mcp-relays'] as const,
   upstreamCredentials: ['upstream-credentials'] as const,
   attributionSettings: ['settings', 'attribution'] as const,
@@ -83,6 +88,14 @@ export function useHealth(): UseQueryResult<ApiHealth> {
   return useQuery({
     queryKey: qk.health,
     queryFn: () => api.health(),
+  })
+}
+
+export function useFleet(windowDays?: number): UseQueryResult<ApiFleetResponse> {
+  return useQuery({
+    queryKey: [...qk.fleet, windowDays ?? 7] as const,
+    queryFn: () => api.fleet(windowDays),
+    refetchInterval: POLL_MS,
   })
 }
 
@@ -352,12 +365,19 @@ export function useRenameApiKey(): UseMutationResult<{ ok: true }, Error, { id: 
 export function useUpdateKeyModels(): UseMutationResult<
   { ok: true },
   Error,
-  { id: string; allowedModels: Array<string> }
+  { id: string; modelAccessMode: ModelAccessMode; allowedModels: Array<string> }
 > {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, allowedModels }: { id: string; allowedModels: Array<string> }) =>
-      api.updateKeyModels(id, allowedModels),
+    mutationFn: ({
+      id,
+      modelAccessMode,
+      allowedModels,
+    }: {
+      id: string
+      modelAccessMode: ModelAccessMode
+      allowedModels: Array<string>
+    }) => api.updateKeyModels(id, modelAccessMode, allowedModels),
     onSuccess: (_data, { id }) => {
       invalidateKeys(qc, [qk.keys, qk.keyDetail(id)])
     },
@@ -458,6 +478,41 @@ export function useRoutingRules(): UseQueryResult<Array<RoutingRule>> {
   return useQuery({
     queryKey: qk.routingRules,
     queryFn: () => api.listRoutingRules().then((r) => r.rules),
+  })
+}
+
+export function useContextCompressionPolicies(): UseQueryResult<Array<ContextCompressionPolicy>> {
+  return useQuery({
+    queryKey: qk.contextCompressionPolicies,
+    queryFn: () => api.listContextCompressionPolicies().then((r) => r.rules),
+  })
+}
+
+export function useCreateContextCompressionPolicy() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.createContextCompressionPolicy,
+    onSuccess: () => invalidateKeys(qc, [qk.contextCompressionPolicies]),
+    onError: (error: Error) => toastMutationError('Failed to create compression policy', error),
+  })
+}
+
+export function useUpdateContextCompressionPolicy() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: { name?: string; enabled?: boolean; match?: object } }) =>
+      api.updateContextCompressionPolicy(id, body),
+    onSuccess: () => invalidateKeys(qc, [qk.contextCompressionPolicies]),
+    onError: (error: Error) => toastMutationError('Failed to update compression policy', error),
+  })
+}
+
+export function useDeleteContextCompressionPolicy() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.deleteContextCompressionPolicy,
+    onSuccess: () => invalidateKeys(qc, [qk.contextCompressionPolicies]),
+    onError: (error: Error) => toastMutationError('Failed to delete compression policy', error),
   })
 }
 

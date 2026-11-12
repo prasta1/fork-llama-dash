@@ -43,6 +43,8 @@ export type RequestLogInput = {
   totalTokens: number | null
   cacheCreationTokens: number | null
   cacheReadTokens: number | null
+  // Used only to price this log entry; it is not persisted.
+  cacheReadTokensIncludedInPrompt?: boolean
   streamed: boolean
   error: string | null
   requestHeaders: string | null
@@ -67,6 +69,12 @@ export type RequestLogInput = {
   routingRoutedModel: string | null
   routingRejectReason: string | null
   credentialInjectionJson?: string | null
+  compressionPolicyId?: string | null
+  compressionPolicyName?: string | null
+  compressionStatus?: string | null
+  compressionInputTokens?: number | null
+  compressionOutputTokens?: number | null
+  compressionElapsedMs?: number | null
 }
 
 export function writeRequestLog(row: RequestLogInput) {
@@ -162,6 +170,12 @@ export function writeRequestLogNow(row: RequestLogInput) {
       routingRoutedModel: row.routingRoutedModel,
       routingRejectReason: row.routingRejectReason,
       credentialInjectionJson: row.credentialInjectionJson ?? null,
+      compressionPolicyId: row.compressionPolicyId ?? null,
+      compressionPolicyName: row.compressionPolicyName ?? null,
+      compressionStatus: row.compressionStatus ?? null,
+      compressionInputTokens: row.compressionInputTokens ?? null,
+      compressionOutputTokens: row.compressionOutputTokens ?? null,
+      compressionElapsedMs: row.compressionElapsedMs ?? null,
     })
     .run()
   publishAdminEvent('request.completed', {
