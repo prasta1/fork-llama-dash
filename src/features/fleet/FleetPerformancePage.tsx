@@ -93,6 +93,7 @@ export function FleetPerformancePage() {
   )
   const sorted = sortRows(rows, sortKey, sortDir)
   const hasActivity = hosts.some((h) => h.activity.available && h.activity.models.length > 0)
+  const activityErrors = hosts.filter((h) => h.activity.error != null)
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) {
@@ -152,10 +153,22 @@ export function FleetPerformancePage() {
         />
 
         <section className="panel !rounded-none !border-x-0 !bg-surface-1">
+          {activityErrors.map((h) => (
+            <div key={h.id} className="border-b border-err/30 bg-err/10 px-6 py-2 max-md:px-3">
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-err">activity unavailable</span>
+              <span className="ml-2 break-all font-mono text-[11px] text-fg-muted">
+                {h.label}: {h.activity.error}
+              </span>
+            </div>
+          ))}
           {data == null ? (
             <div className="empty-state px-6 max-md:px-3">loading performance…</div>
           ) : !hasActivity ? (
-            <div className="empty-state px-6 py-4 max-md:px-3">no activity recorded in the last {windowDays} days.</div>
+            <div className="empty-state px-6 py-4 max-md:px-3">
+              {activityErrors.length > 0
+                ? 'activity unavailable — see errors above.'
+                : `no activity recorded in the last ${windowDays} days.`}
+            </div>
           ) : (
             <div className="overflow-auto">
               <table className="dtable">
